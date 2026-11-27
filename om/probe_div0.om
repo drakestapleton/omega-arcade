@@ -1,0 +1,12 @@
+note SPDX-License-Identifier: Apache-2.0
+note om/probe_div0.om: Deliberate dynamic division-by-zero ray distance probe.
+note Must deterministically trigger Omega Trap 2 (DIV0 -> exit 102, CWE-369).
+fn zero_dist to int
+  ret 0
+end
+
+fn main to int
+  d = zero_dist
+  h = div int 1474560 d
+  ret h
+end

@@ -1,0 +1,575 @@
+note SPDX-License-Identifier: Apache-2.0
+note om/raycast_doom.om: Pure-Omega Wolf3D / DOOM-style 3D Raycaster.
+note Fixed-point Q12 DDA over a 16x16 maze, shaded N/S vs E/W stone walls,
+note procedural brick/conduit textures, depth fog, ceiling/floor gradient,
+note glowing 4-strand weapon sprite + muzzle flare, and live top-right minimap.
+
+const RC_HERO ulong 185
+
+text rc_gname "GAME=raycast_doom"
+text rc_lbl_title "OMEGA RAY"
+text rc_lbl_hp "HP 100"
+text rc_lbl_ammo "AMMO"
+text rc_map_str "1111111111111111100000200000000110300020040400011000000000000301100020000000000112002003000400011000000000000001104000000002002110000030000000011000000000000301102000000400000110200000000020011000030000002001100000000000000110040002003000011111111111111111"
+
+global rmap uchar 256
+global bg_row uint 360
+note rc_st: [0]=px_q12, [1]=py_q12, [2]=ang1024, [3]=fire_t, [4]=ammo, [5]=bob_phase
+global rc_st int 8
+note rc_hit: [0]=pdist, [1]=side, [2]=wtype, [3]=tx, [4]=ddx, [5]=ddy, [6]=sdx, [7]=sdy
+global rc_hit long 8
+
+fn rc_init to void
+  for i ulong 256
+    put rmap i uchar sub get rc_map_str i 48
+  end
+  put rc_st 0 10240
+  put rc_st 1 10240
+  put rc_st 2 110
+  put rc_st 3 0
+  put rc_st 4 99
+  put rc_st 5 0
+  note precompute ceiling (0..179) and floor (180..359) perspective gradient
+  for y ulong 180
+    d = uint sub 179 y
+    r = add uint 8 shr mul d 14 8
+    g = add uint 14 shr mul d 24 8
+    b = add uint 30 shr mul d 48 8
+    put bg_row y rgb r g b
+  end
+  for y ulong 180
+    d = uint y
+    band = uint 0
+    if eq and shr d 3 1 0
+      band = 6
+    end
+    r = add add uint 14 shr mul d 40 8 band
+    g = add add uint 18 shr mul d 48 8 band
+    b = add add uint 28 shr mul d 64 8 band
+    put bg_row add y 180 rgb r g b
+  end
+end
+
+fn rc_blocked x int y int to bool
+  if lt x 4096
+    ret true
+  end
+  if lt y 4096
+    ret true
+  end
+  mx = shr x 12
+  my = shr y 12
+  if ge mx 16
+    ret true
+  end
+  if ge my 16
+    ret true
+  end
+  idx = add mul ulong my 16 ulong mx
+  ret ne get rmap idx 0
+end
+
+fn rc_try_move dx int dy int to void
+  px = get rc_st 0
+  py = get rc_st 1
+  nx = add px dx
+  ny = add py dy
+  m = int 900
+  okx = true
+  if rc_blocked add nx m py
+    okx = false
+  end
+  if rc_blocked sub nx m py
+    okx = false
+  end
+  if okx
+    put rc_st 0 nx
+    px = nx
+  end
+  oky = true
+  if rc_blocked px add ny m
+    oky = false
+  end
+  if rc_blocked px sub ny m
+    oky = false
+  end
+  if oky
+    put rc_st 1 ny
+  end
+end
+
+fn rc_step fr ulong to void
+  ang = get rc_st 2
+  turn = int 2
+  spd = int 165
+  if lt fr 60
+    turn = 1
+    spd = 175
+  else
+    if lt fr 130
+      turn = 4
+      spd = 155
+    else
+      if lt fr 210
+        turn = -3
+        spd = 165
+      else
+        turn = 3
+        spd = 170
+      end
+    end
+  end
+  ang = and add ang turn 1023
+  put rc_st 2 ang
+  dx = shr mul icos1024 ang spd 12
+  dy = shr mul isin1024 ang spd 12
+  rc_try_move dx dy
+  put rc_st 5 add get rc_st 5 28
+  ft = get rc_st 3
+  if gt ft 0
+    put rc_st 3 sub ft 1
+  end
+  if eq rem fr 25 10
+    put rc_st 3 6
+    am = get rc_st 4
+    if gt am 0
+      put rc_st 4 sub am 1
+    end
+  end
+end
+
+fn rc_wall_color wtype ulong side int tx int ty int fog uint to uint
+  r = uint 96
+  g = uint 118
+  b = uint 146
+  if eq wtype 1
+    note fortified slate stone bricks
+    r = 92
+    g = 116
+    b = 152
+    stagger = mul and shr ty 3 1 8
+    if eq and ty 7 0
+      r = 36
+      g = 48
+      b = 68
+    else
+      if eq and add tx stagger 15 0
+        r = 40
+        g = 52
+        b = 72
+      else
+        if eq and ty 7 1
+          r = 122
+          g = 148
+          b = 188
+        end
+      end
+    end
+  else
+    if eq wtype 2
+      note sovereign cyan tech conduit wall
+      r = 28
+      g = 72
+      b = 112
+      if and ge ty 13 le ty 18
+        r = 18
+        g = 232
+        b = 255
+      else
+        if eq and tx 7 0
+          r = 20
+          g = 118
+          b = 160
+        end
+      end
+    else
+      if eq wtype 3
+        note amber-gold reactor pillar
+        r = 196
+        g = 136
+        b = 44
+        if or lt ty 3 gt ty 28
+          r = 94
+          g = 64
+          b = 26
+        else
+          if and ge tx 12 le tx 19
+            r = 255
+            g = 206
+            b = 88
+          end
+        end
+      else
+        note violet-emerald core chamber wall
+        r = 104
+        g = 62
+        b = 164
+        if and ge ty 14 le ty 17
+          r = 38
+          g = 236
+          b = 148
+        else
+          if eq and ty 7 0
+            r = 56
+            g = 34
+            b = 92
+          end
+        end
+      end
+    end
+  end
+  note N/S vs E/W shading
+  if eq side 1
+    r = shr mul r 180 8
+    g = shr mul g 180 8
+    b = shr mul b 180 8
+  end
+  note depth fog toward obsidian navy (10, 16, 30)
+  inv = sub 256 fog
+  r = shr add mul r inv mul uint 10 fog 8
+  g = shr add mul g inv mul uint 16 fog 8
+  b = shr add mul b inv mul uint 30 fog 8
+  ret or or shl r 16 shl g 8 b
+end
+
+fn rc_dda_setup rdx long rdy long to void
+  px = long get rc_st 0
+  py = long get rc_st 1
+  mx = shr px 12
+  my = shr py 12
+  ddx = long 1000000000
+  if ne rdx 0
+    adx = rdx
+    if lt adx 0
+      adx = neg adx
+    end
+    ddx = div 16777216 adx
+  end
+  ddy = long 1000000000
+  if ne rdy 0
+    ady = rdy
+    if lt ady 0
+      ady = neg ady
+    end
+    ddy = div 16777216 ady
+  end
+  put rc_hit 4 ddx
+  put rc_hit 5 ddy
+  if lt rdx 0
+    put rc_hit 6 shr mul sub px shl mx 12 ddx 12
+  else
+    put rc_hit 6 shr mul sub shl add mx 1 12 px ddx 12
+  end
+  if lt rdy 0
+    put rc_hit 7 shr mul sub py shl my 12 ddy 12
+  else
+    put rc_hit 7 shr mul sub shl add my 1 12 py ddy 12
+  end
+end
+
+fn rc_map_cell mx int my int to ulong
+  if lt mx 0
+    ret ulong 1
+  end
+  if ge mx 16
+    ret ulong 1
+  end
+  if lt my 0
+    ret ulong 1
+  end
+  if ge my 16
+    ret ulong 1
+  end
+  ret ulong get rmap add mul ulong my 16 ulong mx
+end
+
+fn rc_dda_march rdx long rdy long to void
+  mx = int shr long get rc_st 0 12
+  my = int shr long get rc_st 1 12
+  stx = int 1
+  if lt rdx 0
+    stx = -1
+  end
+  sty = int 1
+  if lt rdy 0
+    sty = -1
+  end
+  sdx = get rc_hit 6
+  sdy = get rc_hit 7
+  hit = false
+  while not hit bound 32
+    if lt sdx sdy
+      sdx = add sdx get rc_hit 4
+      mx = add mx stx
+      put rc_hit 1 0
+    else
+      sdy = add sdy get rc_hit 5
+      my = add my sty
+      put rc_hit 1 1
+    end
+    cell = rc_map_cell mx my
+    if ne cell 0
+      put rc_hit 2 long cell
+      hit = true
+    end
+  end
+  put rc_hit 6 sdx
+  put rc_hit 7 sdy
+end
+
+fn rc_dda_finish rdx long rdy long to void
+  side = int get rc_hit 1
+  pdist = long 64
+  if eq side 0
+    pdist = sub get rc_hit 6 get rc_hit 4
+  else
+    pdist = sub get rc_hit 7 get rc_hit 5
+  end
+  if lt pdist 64
+    pdist = 64
+  end
+  put rc_hit 0 pdist
+  wpos = long 0
+  if eq side 0
+    wpos = add long get rc_st 1 shr mul pdist rdy 12
+  else
+    wpos = add long get rc_st 0 shr mul pdist rdx 12
+  end
+  put rc_hit 3 shr and wpos 4095 7
+end
+
+fn rc_wall_hit ty int to uint
+  ret rc_wall_color ulong get rc_hit 2 int get rc_hit 1 int get rc_hit 3 ty uint get rc_hit 4
+end
+
+fn rc_draw_wall_span ucol ulong cs int ce int to void
+  tstep = get rc_hit 5
+  tpos = get rc_hit 6
+  while le cs ce bound 360
+    ty = int and shr tpos 16 31
+    tpos = add tpos tstep
+    c = rc_wall_hit ty
+    put fb add mul ulong cs 640 ucol c
+    cs = add cs 1
+  end
+end
+
+fn rc_col_prep to void
+  pdist = get rc_hit 0
+  lineh = int div 1474560 pdist
+  if lt lineh 2
+    lineh = 2
+  end
+  dstart = sub 180 shr lineh 1
+  dend = add 180 shr lineh 1
+  cs = imax dstart 0
+  ce = imin dend 359
+  fog_l = shr sub pdist 3072 7
+  if lt fog_l 0
+    fog_l = 0
+  end
+  if gt fog_l 220
+    fog_l = 220
+  end
+  put rc_hit 4 fog_l
+  tstep = div long 2097152 long lineh
+  put rc_hit 5 tstep
+  put rc_hit 6 mul long sub cs dstart tstep
+  put rc_hit 7 or shl long cs 16 long ce
+end
+
+fn rc_draw_col col int to void
+  rc_col_prep
+  pk = get rc_hit 7
+  cs = int shr pk 16
+  ce = int and pk 65535
+  ucol = ulong col
+  y = int 0
+  while lt y cs bound 360
+    put fb add mul ulong y 640 ucol get bg_row ulong y
+    y = add y 1
+  end
+  rc_draw_wall_span ucol cs ce
+  y = add ce 1
+  while lt y 360 bound 360
+    put fb add mul ulong y 640 ucol get bg_row ulong y
+    y = add y 1
+  end
+end
+
+fn rc_cast_col col int dirx long diry long plx long ply long to void
+  cx_num = mul sub mul long col 2 640 4096
+  camx = div cx_num 640
+  rdx = add dirx shr mul plx camx 12
+  rdy = add diry shr mul ply camx 12
+  rc_dda_setup rdx rdy
+  rc_dda_march rdx rdy
+  rc_dda_finish rdx rdy
+  rc_draw_col col
+end
+
+fn rc_draw_weapon to void
+  bp = get rc_st 5
+  bx = shr mul icos1024 bp 8 12
+  by = shr mul iabs isin1024 bp 6 12
+  ft = get rc_st 3
+  rec = mul ft 4
+  cx = add 320 bx
+  base_y = add add 246 by rec
+  note muzzle flash starburst when firing
+  if gt ft 2
+    my = sub base_y 14
+    draw_ring cx my 24 rgb 0 210 255
+    draw_ring cx my 16 rgb 255 215 90
+    draw_ring cx my 9 rgb 255 255 240
+    draw_glow_line sub cx 30 my add cx 30 my rgb 0 220 255
+    draw_glow_line cx sub my 26 cx add my 26 rgb 255 220 110
+    draw_glow_line sub cx 20 sub my 20 add cx 20 add my 20 rgb 180 110 255
+    draw_glow_line sub cx 20 add my 20 add cx 20 sub my 20 rgb 40 240 150
+  end
+  note dark titanium rail-blaster chassis
+  fill_rect sub cx 38 add base_y 22 76 96 rgb 22 28 42
+  fill_rect sub cx 30 add base_y 8 60 110 rgb 32 42 60
+  fill_rect sub cx 18 sub base_y 6 36 124 rgb 44 56 78
+  rect_outline sub cx 38 add base_y 22 76 96 rgb 76 96 130
+  rect_outline sub cx 18 sub base_y 6 36 124 rgb 96 122 162
+  note barrel muzzle aperture
+  fill_rect sub cx 10 sub base_y 12 20 12 rgb 18 22 34
+  fill_rect sub cx 6 sub base_y 10 12 8 rgb 0 230 255
+  note 4 glowing Omega braided energy strands along rails
+  fill_rect sub cx 26 add base_y 14 5 88 rgb 0 228 255
+  fill_rect sub cx 14 add base_y 4 4 98 rgb 255 209 102
+  fill_rect add cx 10 add base_y 4 4 98 rgb 34 229 138
+  fill_rect add cx 21 add base_y 14 5 88 rgb 184 107 255
+  note glowing core conduits
+  draw_glow_line sub cx 24 add base_y 16 sub cx 24 add base_y 96 rgb 0 180 220
+  draw_glow_line sub cx 12 add base_y 6 sub cx 12 add base_y 98 rgb 220 170 60
+  draw_glow_line add cx 12 add base_y 6 add cx 12 add base_y 98 rgb 25 190 110
+  draw_glow_line add cx 23 add base_y 16 add cx 23 add base_y 96 rgb 150 80 220
+end
+
+fn rc_draw_minimap to void
+  mx0 = int 522
+  my0 = int 10
+  blend_rect sub mx0 4 sub my0 4 106 106 rgb 6 10 22 205
+  rect_outline sub mx0 4 sub my0 4 106 106 rgb 0 212 255
+  for gy ulong 16
+    for gx ulong 16
+      cell = get rmap add mul gy 16 gx
+      col = rgb 16 24 40
+      if eq cell 1
+        col = rgb 104 134 176
+      else
+        if eq cell 2
+          col = rgb 0 216 255
+        else
+          if eq cell 3
+            col = rgb 245 186 72
+          else
+            if eq cell 4
+              col = rgb 156 96 236
+            end
+          end
+        end
+      end
+      fill_rect add mx0 mul int gx 6 add my0 mul int gy 6 5 5 col
+    end
+  end
+  ppx = add mx0 shr mul get rc_st 0 6 12
+  ppy = add my0 shr mul get rc_st 1 6 12
+  ang = get rc_st 2
+  note draw 5 FOV rays on minimap
+  for r ulong 5
+    ra = add ang sub mul int r 32 64
+    rx = add ppx shr mul icos1024 ra 18 12
+    ry = add ppy shr mul isin1024 ra 18 12
+    draw_line ppx ppy rx ry rgb 40 240 200
+  end
+  fill_rect sub ppx 2 sub ppy 2 5 5 rgb 255 235 120
+  px_set ppx ppy rgb 255 255 255
+end
+
+fn rc_draw_hud to void
+  note subtle center reticle
+  fill_rect 313 180 5 1 rgb 0 230 255
+  fill_rect 323 180 5 1 rgb 0 230 255
+  fill_rect 320 173 1 5 rgb 0 230 255
+  fill_rect 320 183 1 5 rgb 0 230 255
+  note bottom-left status card
+  blend_rect 12 308 168 42 rgb 8 14 28 210
+  rect_outline 12 308 168 42 rgb 0 198 240
+  draw_label rc_lbl_title 20 314 1 rgb 0 230 255
+  draw_label rc_lbl_hp 20 330 1 rgb 34 229 138
+  draw_label rc_lbl_ammo 92 330 1 rgb 255 209 102
+  draw_uint ulong get rc_st 4 128 330 1 rgb 255 244 214
+  note 4-strand bar across top of card
+  fill_rect 13 309 41 2 rgb 0 228 255
+  fill_rect 54 309 41 2 rgb 255 209 102
+  fill_rect 95 309 42 2 rgb 34 229 138
+  fill_rect 137 309 42 2 rgb 184 107 255
+end
+
+fn rc_render to void
+  ang = get rc_st 2
+  dirx = long icos1024 ang
+  diry = long isin1024 ang
+  note camera plane = 0.66 * perp(dir) -> (-diry * 2703 >> 12, dirx * 2703 >> 12)
+  plx = shr mul neg diry 2703 12
+  ply = shr mul dirx 2703 12
+  for c ulong 640
+    rc_cast_col int c dirx diry plx ply
+  end
+  rc_draw_weapon
+  rc_draw_minimap
+  rc_draw_hud
+end
+
+fn main to int
+  gfx_init
+  if not parse_cli RC_HERO
+    z = write_all 2 err_badargs len err_badargs
+    ret 2
+  end
+  mode = get cli_cfg 0
+  param = get cli_cfg 1
+  rc_init
+  if eq mode 0
+    t0 = monons
+    dce = uint 0
+    for f ulong param bound 2000
+      rc_step f
+      rc_render
+      dce = xor dce sample_fb_u32 f
+    end
+    t1 = monons
+    sha_fb_ppm
+    emit_bench_line rc_gname param ulong sub t1 t0 dce
+    ret 0
+  end
+  if eq mode 1
+    hf = RC_HERO
+    if ge hf param
+      hf = sub param 1
+    end
+    for f ulong param bound 2000
+      rc_step f
+      rc_render
+      put frame_hashes f hash_fb_u32
+      if eq f hf
+        sha_fb_ppm
+        copy_dig_hero
+      end
+    end
+    sha_fb_ppm
+    copy_dig_fin
+    sha_stream_u32 param
+    emit_verify_line rc_gname param hf
+    ret 0
+  end
+  note mode 2: dump P6 PPM at target frame
+  for f ulong add param 1 bound 2000
+    rc_step f
+    rc_render
+  end
+  ret write_ppm
+end

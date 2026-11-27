@@ -1,0 +1,11 @@
+note SPDX-License-Identifier: Apache-2.0
+note om/probe_overflow.om: Deliberate signed 32-bit coordinate/score overflow.
+note Must deterministically trigger Omega Trap 1 (OVERFLOW -> exit 101, CWE-190).
+fn bump x int to int
+  ret add x 1
+end
+
+fn main to int
+  v = bump int 2147483647
+  ret v
+end

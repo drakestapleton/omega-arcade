@@ -1,0 +1,531 @@
+{
+  "cpu_pin": 15,
+  "frames": 300,
+  "trials": 3,
+  "binary_sizes_bytes": {
+    "raycast_doom": {
+      "om_a64linux": 41752,
+      "c_gcc_o3": 71648
+    },
+    "blocks_puzzle": {
+      "om_a64linux": 43832,
+      "c_gcc_o3": 72040
+    },
+    "starfighter": {
+      "om_a64linux": 48184,
+      "c_gcc_o3": 72648
+    }
+  },
+  "gate_binary_bytes": 33448,
+  "parity": {
+    "raycast_doom": {
+      "frames": 300,
+      "hero_frame": 185,
+      "hero_ppm_sha256": "6bac57339b917c42d89f9ed8481ae08f7b422d0c9f26fe3f48b97351ea736a52",
+      "final_ppm_sha256": "daff8fe7b40653109eb56986364488b20160f7eb6083b8276d72921f935d3509",
+      "stream_sha256": "fcddd5379dba1f73958f9d32f70ae46146fc58050237890b5255404b87379923",
+      "ppm_bytes": 691215,
+      "verdict": "EXACT_PARITY"
+    },
+    "blocks_puzzle": {
+      "frames": 300,
+      "hero_frame": 248,
+      "hero_ppm_sha256": "ddea108ea8b9649dcab8055006f5041a4003c4f567c304c3e77a015f2e8b7535",
+      "final_ppm_sha256": "28256ac4e1ecced533f07df2a159b6c0862cac85713a32d8c960a1471d70ca4d",
+      "stream_sha256": "95ea8731949096c035733e0288f306830551ada4e7cc26a20f1e449d2ef1185b",
+      "ppm_bytes": 691215,
+      "verdict": "EXACT_PARITY"
+    },
+    "starfighter": {
+      "frames": 300,
+      "hero_frame": 195,
+      "hero_ppm_sha256": "cf1ca2191b3c3f31249f8dd6a4d51e5d1ec9180c15dfeb9a5bf3125e6eb72edf",
+      "final_ppm_sha256": "77dc9aa56eaf726c5509c4d19be784204e518b53368c61818fed1396462af8d2",
+      "stream_sha256": "f7ee03c4093b61cb32ac513aa27b16666bd1f04fa368b66107bf2291a9aac82b",
+      "ppm_bytes": 691215,
+      "verdict": "EXACT_PARITY"
+    }
+  },
+  "games": {
+    "raycast_doom": {
+      "om_a64linux": {
+        "median_fps": 1609.95,
+        "median_us_per_frame": 621.14,
+        "median_ms": 186.342,
+        "median_vmhwm_kb": 972,
+        "trials": [
+          {
+            "ns": 186670640,
+            "ms": 186.671,
+            "wall_ms": 196.236,
+            "us_per_frame": 622.24,
+            "fps": 1607.11,
+            "vmhwm_kb": 972,
+            "anti_dce": "3b8c2c63",
+            "final_ppm_sha256": "daff8fe7b40653109eb56986364488b20160f7eb6083b8276d72921f935d3509"
+          },
+          {
+            "ns": 186321740,
+            "ms": 186.322,
+            "wall_ms": 195.123,
+            "us_per_frame": 621.07,
+            "fps": 1610.12,
+            "vmhwm_kb": 968,
+            "anti_dce": "3b8c2c63",
+            "final_ppm_sha256": "daff8fe7b40653109eb56986364488b20160f7eb6083b8276d72921f935d3509"
+          },
+          {
+            "ns": 186341547,
+            "ms": 186.342,
+            "wall_ms": 195.169,
+            "us_per_frame": 621.14,
+            "fps": 1609.95,
+            "vmhwm_kb": 972,
+            "anti_dce": "3b8c2c63",
+            "final_ppm_sha256": "daff8fe7b40653109eb56986364488b20160f7eb6083b8276d72921f935d3509"
+          }
+        ]
+      },
+      "c_gcc_o3": {
+        "median_fps": 6151.83,
+        "median_us_per_frame": 162.55,
+        "median_ms": 48.766,
+        "median_vmhwm_kb": 2140,
+        "trials": [
+          {
+            "ns": 48765942,
+            "ms": 48.766,
+            "wall_ms": 52.137,
+            "us_per_frame": 162.55,
+            "fps": 6151.83,
+            "vmhwm_kb": 2140,
+            "anti_dce": "3b8c2c63",
+            "final_ppm_sha256": "daff8fe7b40653109eb56986364488b20160f7eb6083b8276d72921f935d3509"
+          },
+          {
+            "ns": 48748004,
+            "ms": 48.748,
+            "wall_ms": 52.152,
+            "us_per_frame": 162.49,
+            "fps": 6154.1,
+            "vmhwm_kb": 2136,
+            "anti_dce": "3b8c2c63",
+            "final_ppm_sha256": "daff8fe7b40653109eb56986364488b20160f7eb6083b8276d72921f935d3509"
+          },
+          {
+            "ns": 49151703,
+            "ms": 49.152,
+            "wall_ms": 52.818,
+            "us_per_frame": 163.84,
+            "fps": 6103.55,
+            "vmhwm_kb": 2140,
+            "anti_dce": "3b8c2c63",
+            "final_ppm_sha256": "daff8fe7b40653109eb56986364488b20160f7eb6083b8276d72921f935d3509"
+          }
+        ]
+      },
+      "node_v24": {
+        "median_fps": 1893.01,
+        "median_us_per_frame": 528.26,
+        "median_ms": 158.478,
+        "median_vmhwm_kb": 59836,
+        "trials": [
+          {
+            "ns": 160648027,
+            "ms": 160.648,
+            "wall_ms": 181.923,
+            "us_per_frame": 535.49,
+            "fps": 1867.44,
+            "vmhwm_kb": 59708,
+            "anti_dce": "3b8c2c63",
+            "final_ppm_sha256": "daff8fe7b40653109eb56986364488b20160f7eb6083b8276d72921f935d3509"
+          },
+          {
+            "ns": 151147117,
+            "ms": 151.147,
+            "wall_ms": 172.2,
+            "us_per_frame": 503.82,
+            "fps": 1984.82,
+            "vmhwm_kb": 59836,
+            "anti_dce": "3b8c2c63",
+            "final_ppm_sha256": "daff8fe7b40653109eb56986364488b20160f7eb6083b8276d72921f935d3509"
+          },
+          {
+            "ns": 158478171,
+            "ms": 158.478,
+            "wall_ms": 179.681,
+            "us_per_frame": 528.26,
+            "fps": 1893.01,
+            "vmhwm_kb": 60036,
+            "anti_dce": "3b8c2c63",
+            "final_ppm_sha256": "daff8fe7b40653109eb56986364488b20160f7eb6083b8276d72921f935d3509"
+          }
+        ]
+      },
+      "python3": {
+        "median_fps": 34.56,
+        "median_us_per_frame": 28937.95,
+        "median_ms": 8681.384,
+        "median_vmhwm_kb": 22388,
+        "trials": [
+          {
+            "ns": 8657648968,
+            "ms": 8657.649,
+            "wall_ms": 8698.524,
+            "us_per_frame": 28858.83,
+            "fps": 34.65,
+            "vmhwm_kb": 22384,
+            "anti_dce": "3b8c2c63",
+            "final_ppm_sha256": "daff8fe7b40653109eb56986364488b20160f7eb6083b8276d72921f935d3509"
+          },
+          {
+            "ns": 8681383950,
+            "ms": 8681.384,
+            "wall_ms": 8721.559,
+            "us_per_frame": 28937.95,
+            "fps": 34.56,
+            "vmhwm_kb": 22456,
+            "anti_dce": "3b8c2c63",
+            "final_ppm_sha256": "daff8fe7b40653109eb56986364488b20160f7eb6083b8276d72921f935d3509"
+          },
+          {
+            "ns": 8718589707,
+            "ms": 8718.59,
+            "wall_ms": 8764.371,
+            "us_per_frame": 29061.97,
+            "fps": 34.41,
+            "vmhwm_kb": 22388,
+            "anti_dce": "3b8c2c63",
+            "final_ppm_sha256": "daff8fe7b40653109eb56986364488b20160f7eb6083b8276d72921f935d3509"
+          }
+        ]
+      },
+      "speedups_vs_om": {
+        "om_a64linux": 1.0,
+        "c_gcc_o3": 0.26,
+        "node_v24": 0.85,
+        "python3": 46.58
+      }
+    },
+    "blocks_puzzle": {
+      "om_a64linux": {
+        "median_fps": 2808.09,
+        "median_us_per_frame": 356.11,
+        "median_ms": 106.834,
+        "median_vmhwm_kb": 968,
+        "trials": [
+          {
+            "ns": 106841907,
+            "ms": 106.842,
+            "wall_ms": 115.86,
+            "us_per_frame": 356.14,
+            "fps": 2807.89,
+            "vmhwm_kb": 968,
+            "anti_dce": "e7cdc442",
+            "final_ppm_sha256": "28256ac4e1ecced533f07df2a159b6c0862cac85713a32d8c960a1471d70ca4d"
+          },
+          {
+            "ns": 106834083,
+            "ms": 106.834,
+            "wall_ms": 115.731,
+            "us_per_frame": 356.11,
+            "fps": 2808.09,
+            "vmhwm_kb": 972,
+            "anti_dce": "e7cdc442",
+            "final_ppm_sha256": "28256ac4e1ecced533f07df2a159b6c0862cac85713a32d8c960a1471d70ca4d"
+          },
+          {
+            "ns": 106827602,
+            "ms": 106.828,
+            "wall_ms": 115.827,
+            "us_per_frame": 356.09,
+            "fps": 2808.26,
+            "vmhwm_kb": 968,
+            "anti_dce": "e7cdc442",
+            "final_ppm_sha256": "28256ac4e1ecced533f07df2a159b6c0862cac85713a32d8c960a1471d70ca4d"
+          }
+        ]
+      },
+      "c_gcc_o3": {
+        "median_fps": 15946.8,
+        "median_us_per_frame": 62.71,
+        "median_ms": 18.813,
+        "median_vmhwm_kb": 2204,
+        "trials": [
+          {
+            "ns": 18812551,
+            "ms": 18.813,
+            "wall_ms": 22.692,
+            "us_per_frame": 62.71,
+            "fps": 15946.8,
+            "vmhwm_kb": 2208,
+            "anti_dce": "e7cdc442",
+            "final_ppm_sha256": "28256ac4e1ecced533f07df2a159b6c0862cac85713a32d8c960a1471d70ca4d"
+          },
+          {
+            "ns": 18821926,
+            "ms": 18.822,
+            "wall_ms": 22.398,
+            "us_per_frame": 62.74,
+            "fps": 15938.86,
+            "vmhwm_kb": 2204,
+            "anti_dce": "e7cdc442",
+            "final_ppm_sha256": "28256ac4e1ecced533f07df2a159b6c0862cac85713a32d8c960a1471d70ca4d"
+          },
+          {
+            "ns": 18679990,
+            "ms": 18.68,
+            "wall_ms": 22.288,
+            "us_per_frame": 62.27,
+            "fps": 16059.97,
+            "vmhwm_kb": 2204,
+            "anti_dce": "e7cdc442",
+            "final_ppm_sha256": "28256ac4e1ecced533f07df2a159b6c0862cac85713a32d8c960a1471d70ca4d"
+          }
+        ]
+      },
+      "node_v24": {
+        "median_fps": 1614.24,
+        "median_us_per_frame": 619.49,
+        "median_ms": 185.846,
+        "median_vmhwm_kb": 57780,
+        "trials": [
+          {
+            "ns": 184460669,
+            "ms": 184.461,
+            "wall_ms": 206.196,
+            "us_per_frame": 614.87,
+            "fps": 1626.36,
+            "vmhwm_kb": 57780,
+            "anti_dce": "e7cdc442",
+            "final_ppm_sha256": "28256ac4e1ecced533f07df2a159b6c0862cac85713a32d8c960a1471d70ca4d"
+          },
+          {
+            "ns": 185845509,
+            "ms": 185.846,
+            "wall_ms": 207.43,
+            "us_per_frame": 619.49,
+            "fps": 1614.24,
+            "vmhwm_kb": 57844,
+            "anti_dce": "e7cdc442",
+            "final_ppm_sha256": "28256ac4e1ecced533f07df2a159b6c0862cac85713a32d8c960a1471d70ca4d"
+          },
+          {
+            "ns": 186420519,
+            "ms": 186.421,
+            "wall_ms": 208.147,
+            "us_per_frame": 621.4,
+            "fps": 1609.26,
+            "vmhwm_kb": 57224,
+            "anti_dce": "e7cdc442",
+            "final_ppm_sha256": "28256ac4e1ecced533f07df2a159b6c0862cac85713a32d8c960a1471d70ca4d"
+          }
+        ]
+      },
+      "python3": {
+        "median_fps": 38.48,
+        "median_us_per_frame": 25990.55,
+        "median_ms": 7797.166,
+        "median_vmhwm_kb": 22012,
+        "trials": [
+          {
+            "ns": 7740041611,
+            "ms": 7740.042,
+            "wall_ms": 7779.08,
+            "us_per_frame": 25800.14,
+            "fps": 38.76,
+            "vmhwm_kb": 22012,
+            "anti_dce": "e7cdc442",
+            "final_ppm_sha256": "28256ac4e1ecced533f07df2a159b6c0862cac85713a32d8c960a1471d70ca4d"
+          },
+          {
+            "ns": 7797166052,
+            "ms": 7797.166,
+            "wall_ms": 7836.146,
+            "us_per_frame": 25990.55,
+            "fps": 38.48,
+            "vmhwm_kb": 22012,
+            "anti_dce": "e7cdc442",
+            "final_ppm_sha256": "28256ac4e1ecced533f07df2a159b6c0862cac85713a32d8c960a1471d70ca4d"
+          },
+          {
+            "ns": 7937769337,
+            "ms": 7937.769,
+            "wall_ms": 7976.844,
+            "us_per_frame": 26459.23,
+            "fps": 37.79,
+            "vmhwm_kb": 22008,
+            "anti_dce": "e7cdc442",
+            "final_ppm_sha256": "28256ac4e1ecced533f07df2a159b6c0862cac85713a32d8c960a1471d70ca4d"
+          }
+        ]
+      },
+      "speedups_vs_om": {
+        "om_a64linux": 1.0,
+        "c_gcc_o3": 0.18,
+        "node_v24": 1.74,
+        "python3": 72.98
+      }
+    },
+    "starfighter": {
+      "om_a64linux": {
+        "median_fps": 5649.69,
+        "median_us_per_frame": 177.0,
+        "median_ms": 53.1,
+        "median_vmhwm_kb": 976,
+        "trials": [
+          {
+            "ns": 53097231,
+            "ms": 53.097,
+            "wall_ms": 62.215,
+            "us_per_frame": 176.99,
+            "fps": 5650.01,
+            "vmhwm_kb": 976,
+            "anti_dce": "fc7806f4",
+            "final_ppm_sha256": "77dc9aa56eaf726c5509c4d19be784204e518b53368c61818fed1396462af8d2"
+          },
+          {
+            "ns": 53100287,
+            "ms": 53.1,
+            "wall_ms": 61.897,
+            "us_per_frame": 177.0,
+            "fps": 5649.69,
+            "vmhwm_kb": 980,
+            "anti_dce": "fc7806f4",
+            "final_ppm_sha256": "77dc9aa56eaf726c5509c4d19be784204e518b53368c61818fed1396462af8d2"
+          },
+          {
+            "ns": 53239807,
+            "ms": 53.24,
+            "wall_ms": 62.2,
+            "us_per_frame": 177.47,
+            "fps": 5634.88,
+            "vmhwm_kb": 976,
+            "anti_dce": "fc7806f4",
+            "final_ppm_sha256": "77dc9aa56eaf726c5509c4d19be784204e518b53368c61818fed1396462af8d2"
+          }
+        ]
+      },
+      "c_gcc_o3": {
+        "median_fps": 34404.02,
+        "median_us_per_frame": 29.07,
+        "median_ms": 8.72,
+        "median_vmhwm_kb": 2148,
+        "trials": [
+          {
+            "ns": 8649863,
+            "ms": 8.65,
+            "wall_ms": 12.116,
+            "us_per_frame": 28.83,
+            "fps": 34682.63,
+            "vmhwm_kb": 2148,
+            "anti_dce": "fc7806f4",
+            "final_ppm_sha256": "77dc9aa56eaf726c5509c4d19be784204e518b53368c61818fed1396462af8d2"
+          },
+          {
+            "ns": 8719911,
+            "ms": 8.72,
+            "wall_ms": 12.168,
+            "us_per_frame": 29.07,
+            "fps": 34404.02,
+            "vmhwm_kb": 2144,
+            "anti_dce": "fc7806f4",
+            "final_ppm_sha256": "77dc9aa56eaf726c5509c4d19be784204e518b53368c61818fed1396462af8d2"
+          },
+          {
+            "ns": 8741255,
+            "ms": 8.741,
+            "wall_ms": 12.163,
+            "us_per_frame": 29.14,
+            "fps": 34320.01,
+            "vmhwm_kb": 2152,
+            "anti_dce": "fc7806f4",
+            "final_ppm_sha256": "77dc9aa56eaf726c5509c4d19be784204e518b53368c61818fed1396462af8d2"
+          }
+        ]
+      },
+      "node_v24": {
+        "median_fps": 5431.12,
+        "median_us_per_frame": 184.12,
+        "median_ms": 55.237,
+        "median_vmhwm_kb": 60740,
+        "trials": [
+          {
+            "ns": 55237228,
+            "ms": 55.237,
+            "wall_ms": 76.686,
+            "us_per_frame": 184.12,
+            "fps": 5431.12,
+            "vmhwm_kb": 60776,
+            "anti_dce": "fc7806f4",
+            "final_ppm_sha256": "77dc9aa56eaf726c5509c4d19be784204e518b53368c61818fed1396462af8d2"
+          },
+          {
+            "ns": 56422771,
+            "ms": 56.423,
+            "wall_ms": 77.134,
+            "us_per_frame": 188.08,
+            "fps": 5317.0,
+            "vmhwm_kb": 60740,
+            "anti_dce": "fc7806f4",
+            "final_ppm_sha256": "77dc9aa56eaf726c5509c4d19be784204e518b53368c61818fed1396462af8d2"
+          },
+          {
+            "ns": 54425383,
+            "ms": 54.425,
+            "wall_ms": 76.259,
+            "us_per_frame": 181.42,
+            "fps": 5512.13,
+            "vmhwm_kb": 59812,
+            "anti_dce": "fc7806f4",
+            "final_ppm_sha256": "77dc9aa56eaf726c5509c4d19be784204e518b53368c61818fed1396462af8d2"
+          }
+        ]
+      },
+      "python3": {
+        "median_fps": 166.24,
+        "median_us_per_frame": 6015.41,
+        "median_ms": 1804.622,
+        "median_vmhwm_kb": 18884,
+        "trials": [
+          {
+            "ns": 1804622266,
+            "ms": 1804.622,
+            "wall_ms": 1842.071,
+            "us_per_frame": 6015.41,
+            "fps": 166.24,
+            "vmhwm_kb": 18884,
+            "anti_dce": "fc7806f4",
+            "final_ppm_sha256": "77dc9aa56eaf726c5509c4d19be784204e518b53368c61818fed1396462af8d2"
+          },
+          {
+            "ns": 1805693774,
+            "ms": 1805.694,
+            "wall_ms": 1843.422,
+            "us_per_frame": 6018.98,
+            "fps": 166.14,
+            "vmhwm_kb": 18884,
+            "anti_dce": "fc7806f4",
+            "final_ppm_sha256": "77dc9aa56eaf726c5509c4d19be784204e518b53368c61818fed1396462af8d2"
+          },
+          {
+            "ns": 1804225266,
+            "ms": 1804.225,
+            "wall_ms": 1841.383,
+            "us_per_frame": 6014.08,
+            "fps": 166.28,
+            "vmhwm_kb": 18884,
+            "anti_dce": "fc7806f4",
+            "final_ppm_sha256": "77dc9aa56eaf726c5509c4d19be784204e518b53368c61818fed1396462af8d2"
+          }
+        ]
+      },
+      "speedups_vs_om": {
+        "om_a64linux": 1.0,
+        "c_gcc_o3": 0.16,
+        "node_v24": 1.04,
+        "python3": 33.99
+      }
+    }
+  }
+}

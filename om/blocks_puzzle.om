@@ -1,0 +1,652 @@
+note SPDX-License-Identifier: Apache-2.0
+note om/blocks_puzzle.om: Pure-Omega Falling Blocks Puzzle Engine.
+note 7-bag tetromino state machine, SRS wall kicks, hard-drop ghost outline,
+note shaded 3D bevel blocks, line-clear flash + 96-particle burst, and live HUD.
+
+const BK_HERO ulong 248
+const BK_OX int 240
+const BK_OY int 20
+const BK_CELL int 16
+
+text bk_gname "GAME=blocks_puzzle"
+text bk_lbl_omega "OMEGA"
+text bk_lbl_blocks "BLOCKS"
+text bk_lbl_score "SCORE"
+text bk_lbl_lines "LINES"
+text bk_lbl_level "LEVEL"
+text bk_lbl_next "NEXT"
+text bk_lbl_bag "7-BAG"
+text bk_lbl_frame "FRAME"
+note 7 pieces x 4 rots x 4 cells (dx, dy) in 0..3 encoded as 48+v (224 bytes)
+note order: I(0), O(1), T(2), S(3), Z(4), J(5), L(6)
+text bk_shapes "01112131202122230212223210111213102011211020112110201121102011211001112110112112011121121001111210200111101121221121021200011112001011212011211201111222100111020001112110201112011121221011021220011121101112220111210200101112"
+
+global board uchar 200
+global bag uchar 7
+note bk_st: 0=rng, 1=bag_pos, 2=cur_p, 3=cur_r, 4=cur_x, 5=cur_y, 6=next_p,
+note 7=score, 8=lines, 9=level, 10=tgt_r, 11=tgt_x, 12=flash_t, 13=flash_mask, 14=frame_n
+global bk_st int 16
+global pt_x int 96
+global pt_y int 96
+global pt_vx int 96
+global pt_vy int 96
+global pt_life int 96
+global pt_col uint 96
+
+fn bk_rand to uint
+  s = uint get bk_st 0
+  s = add mul s uint 1664525 uint 1013904223
+  put bk_st 0 int and s 2147483647
+  ret s
+end
+
+fn bk_shape_dx p int r int c int to int
+  idx = add mul ulong p 32 add mul ulong r 8 mul ulong c 2
+  ret int sub get bk_shapes idx 48
+end
+
+fn bk_shape_dy p int r int c int to int
+  idx = add add mul ulong p 32 add mul ulong r 8 mul ulong c 2 1
+  ret int sub get bk_shapes idx 48
+end
+
+fn bk_refill_bag to void
+  for i ulong 7
+    put bag i uchar i
+  end
+  i = int 6
+  while gt i 0 bound 7
+    j = int rem bk_rand uint add i 1
+    tmp = get bag ulong i
+    put bag ulong i get bag ulong j
+    put bag ulong j tmp
+    i = sub i 1
+  end
+  put bk_st 1 0
+end
+
+fn bk_pop_bag to int
+  bp = get bk_st 1
+  if ge bp 7
+    bk_refill_bag
+    bp = 0
+  end
+  p = int get bag ulong bp
+  put bk_st 1 add bp 1
+  ret p
+end
+
+fn bk_fits p int r int x int y int to bool
+  for c ulong 4
+    gx = add x bk_shape_dx p r int c
+    gy = add y bk_shape_dy p r int c
+    if lt gx 0
+      ret false
+    end
+    if ge gx 10
+      ret false
+    end
+    if ge gy 20
+      ret false
+    end
+    if ge gy 0
+      if ne get board add mul ulong gy 10 ulong gx 0
+        ret false
+      end
+    end
+  end
+  ret true
+end
+
+fn bk_ghost_y p int r int x int y int to int
+  gy = y
+  while bk_fits p r x add gy 1 bound 24
+    gy = add gy 1
+  end
+  ret gy
+end
+
+fn bk_try_rotate to bool
+  p = get bk_st 2
+  r0 = get bk_st 3
+  r1 = and add r0 1 3
+  x0 = get bk_st 4
+  y0 = get bk_st 5
+  note SRS wall-kick offsets
+  kdx = new int 6 0
+  kdy = new int 6 0
+  put kdx 0 0
+  put kdx 1 -1
+  put kdx 2 1
+  put kdx 3 0
+  put kdx 4 -2
+  put kdx 5 2
+  put kdy 3 -1
+  for k ulong 6
+    nx = add x0 get kdx k
+    ny = add y0 get kdy k
+    if bk_fits p r1 nx ny
+      put bk_st 3 r1
+      put bk_st 4 nx
+      put bk_st 5 ny
+      ret true
+    end
+  end
+  ret false
+end
+
+fn bk_stamp p int r int x int y int val uchar to void
+  for c ulong 4
+    px = add x bk_shape_dx p r int c
+    py = add y bk_shape_dy p r int c
+    if ge py 0
+      if lt py 20
+        put board add mul ulong py 10 ulong px val
+      end
+    end
+  end
+end
+
+fn bk_score_board to int
+  cl = int 0
+  for row ulong 20
+    full = true
+    for col ulong 10
+      if eq get board add mul row 10 col 0
+        full = false
+      end
+    end
+    if full
+      cl = add cl 1
+    end
+  end
+  holes = int 0
+  agg_h = int 0
+  for col ulong 10
+    seen = false
+    for row ulong 20
+      if ne get board add mul row 10 col 0
+        if not seen
+          seen = true
+          agg_h = add agg_h sub 20 int row
+        end
+      else
+        if seen
+          holes = add holes 1
+        end
+      end
+    end
+  end
+  ret sub sub mul cl 180 mul holes 42 mul agg_h 5
+end
+
+fn bk_eval_place p int r int x int to int
+  if not bk_fits p r x 0
+    ret -999999
+  end
+  gy = bk_ghost_y p r x 0
+  bk_stamp p r x gy uchar add p 1
+  sc = bk_score_board
+  bk_stamp p r x gy uchar 0
+  ret add sc mul gy 4
+end
+
+fn bk_plan_ai to void
+  p = get bk_st 2
+  best_sc = int -999999
+  best_r = int 0
+  best_x = int 3
+  for r ulong 4
+    x = int -2
+    while lt x 10 bound 14
+      sc = bk_eval_place p int r x
+      if gt sc best_sc
+        best_sc = sc
+        best_r = int r
+        best_x = x
+      end
+      x = add x 1
+    end
+  end
+  put bk_st 10 best_r
+  put bk_st 11 best_x
+end
+
+fn bk_piece_color cid int to uint
+  if eq cid 1
+    ret rgb 0 228 255
+  end
+  if eq cid 2
+    ret rgb 255 212 82
+  end
+  if eq cid 3
+    ret rgb 184 96 255
+  end
+  if eq cid 4
+    ret rgb 38 232 138
+  end
+  if eq cid 5
+    ret rgb 255 72 104
+  end
+  if eq cid 6
+    ret rgb 66 138 255
+  end
+  ret rgb 255 152 56
+end
+
+fn bk_spawn_particles row int to void
+  py = add BK_OY add mul row BK_CELL 8
+  for col ulong 10
+    cid = int get board add mul ulong row 10 col
+    c = bk_piece_color cid
+    px = add BK_OX add mul int col BK_CELL 8
+    note find free particle slot
+    for k ulong 96
+      if le get pt_life k 0
+        put pt_x k shl px 4
+        put pt_y k shl py 4
+        rv = bk_rand
+        vx = sub int and rv 63 32
+        vy = sub int and shr rv 6 31 44
+        put pt_vx k vx
+        put pt_vy k vy
+        put pt_life k 22
+        put pt_col k c
+        break
+      end
+    end
+  end
+end
+
+fn bk_spawn_next to void
+  p = get bk_st 6
+  put bk_st 2 p
+  put bk_st 6 bk_pop_bag
+  put bk_st 3 0
+  put bk_st 4 3
+  put bk_st 5 0
+  if not bk_fits p 0 3 0
+    note reset top rows cleanly if board tops out
+    for i ulong 200
+      put board i uchar 0
+    end
+  end
+  bk_plan_ai
+end
+
+fn bk_collapse_row row int to void
+  while gt row 0 bound 20
+    dst = mul ulong row 10
+    src = mul ulong sub row 1 10
+    for col ulong 10
+      put board add dst col get board add src col
+    end
+    row = sub row 1
+  end
+  for col ulong 10
+    put board col uchar 0
+  end
+end
+
+fn bk_lock_piece to void
+  bk_stamp get bk_st 2 get bk_st 3 get bk_st 4 get bk_st 5 uchar add get bk_st 2 1
+  cleared = int 0
+  fmask = int 0
+  row = int 19
+  while ge row 0 bound 28
+    full = true
+    base = mul ulong row 10
+    for col ulong 10
+      if eq get board add base col 0
+        full = false
+      end
+    end
+    if full
+      cleared = add cleared 1
+      fmask = or fmask shl int 1 row
+      bk_spawn_particles row
+      bk_collapse_row row
+    else
+      row = sub row 1
+    end
+  end
+  if gt cleared 0
+    put bk_st 12 10
+    put bk_st 13 fmask
+    put bk_st 8 add get bk_st 8 cleared
+    put bk_st 9 add 1 div get bk_st 8 4
+    pts = mul mul cleared cleared 100
+    put bk_st 7 add get bk_st 7 mul pts get bk_st 9
+  else
+    put bk_st 7 add get bk_st 7 10
+  end
+  bk_spawn_next
+end
+
+fn bk_init to void
+  for i ulong 200
+    put board i uchar 0
+  end
+  for i ulong 96
+    put pt_life i 0
+  end
+  put bk_st 0 13372026
+  put bk_st 1 7
+  put bk_st 7 0
+  put bk_st 8 0
+  put bk_st 9 1
+  put bk_st 12 0
+  put bk_st 13 0
+  put bk_st 14 0
+  note pre-seed 4 rich multi-color starter rows so game starts exciting
+  for r ulong 4
+    row = add 16 r
+    gap = add 2 rem mul r 3 6
+    for c ulong 10
+      if ne c gap
+        cid = add 1 rem add mul r 3 c 7
+        put board add mul row 10 c uchar cid
+      end
+    end
+  end
+  bk_refill_bag
+  put bk_st 6 bk_pop_bag
+  bk_spawn_next
+end
+
+fn bk_step fr ulong to void
+  put bk_st 14 int fr
+  note update particles
+  for k ulong 96
+    lf = get pt_life k
+    if gt lf 0
+      put pt_x k add get pt_x k get pt_vx k
+      put pt_y k add get pt_y k get pt_vy k
+      put pt_vy k add get pt_vy k 3
+      put pt_life k sub lf 1
+    end
+  end
+  ft = get bk_st 12
+  if gt ft 0
+    put bk_st 12 sub ft 1
+  end
+  note AI controls: rotate toward tgt_r, slide toward tgt_x, drop smoothly
+  if ne get bk_st 3 get bk_st 10
+    ok = bk_try_rotate
+    if not ok
+      put bk_st 10 get bk_st 3
+    end
+  else
+    cx = get bk_st 4
+    tx = get bk_st 11
+    if lt cx tx
+      if bk_fits get bk_st 2 get bk_st 3 add cx 1 get bk_st 5
+        put bk_st 4 add cx 1
+      end
+    else
+      if gt cx tx
+        if bk_fits get bk_st 2 get bk_st 3 sub cx 1 get bk_st 5
+          put bk_st 4 sub cx 1
+        end
+      end
+    end
+  end
+  note gravity + aligned fast drop
+  p = get bk_st 2
+  r = get bk_st 3
+  cx = get bk_st 4
+  cy = get bk_st 5
+  step_n = int 1
+  if eq r get bk_st 10
+    if eq cx get bk_st 11
+      step_n = 2
+    end
+  end
+  for s ulong 2
+    if lt int s step_n
+      if bk_fits p r cx add cy 1
+        cy = add cy 1
+        put bk_st 5 cy
+      else
+        bk_lock_piece
+        ret
+      end
+    end
+  end
+end
+
+fn bk_draw_bevel x int y int c uint to void
+  r = and shr c 16 255
+  g = and shr c 8 255
+  b = and c 255
+  hi = rgb add r 72 add g 72 add b 72
+  lo = rgb shr r 1 shr g 1 shr b 1
+  core = rgb add r 22 add g 22 add b 22
+  fill_rect x y 15 15 c
+  note top and left specular highlight bevel
+  fill_rect x y 15 2 hi
+  fill_rect x y 2 15 hi
+  note bottom and right shadow bevel
+  fill_rect x add y 13 15 2 lo
+  fill_rect add x 13 y 2 15 lo
+  note inner glossy gem highlight
+  fill_rect add x 4 add y 4 7 7 core
+  fill_rect add x 4 add y 4 3 2 rgb 255 255 255
+end
+
+fn bk_draw_ghost x int y int c uint to void
+  blend_rect add x 1 add y 1 13 13 c 46
+  rect_outline x y 15 15 c
+  rect_outline add x 1 add y 1 13 13 c
+end
+
+fn bk_draw_bg to void
+  for y ulong 360
+    r = add uint 7 shr mul uint y 10 8
+    g = add uint 11 shr mul uint y 16 8
+    b = add uint 26 shr mul uint y 30 8
+    col = rgb r g b
+    row = mul y 640
+    for x ulong 640
+      put fb add row x col
+    end
+  end
+  note subtle vertical/horizontal cyber grid lines
+  gcol = rgb 18 28 54
+  gx = int 20
+  while lt gx 640 bound 40
+    fill_rect gx 0 1 360 gcol
+    gx = add gx 40
+  end
+  gy = int 20
+  while lt gy 360 bound 20
+    fill_rect 0 gy 640 1 gcol
+    gy = add gy 40
+  end
+end
+
+fn bk_draw_panels to void
+  note left HUD panel
+  blend_rect 28 24 184 312 rgb 10 16 34 220
+  rect_outline 28 24 184 312 rgb 0 205 245
+  fill_rect 29 25 45 3 rgb 0 228 255
+  fill_rect 74 25 46 3 rgb 255 209 102
+  fill_rect 120 25 46 3 rgb 34 229 138
+  fill_rect 166 25 45 3 rgb 184 107 255
+  draw_label bk_lbl_omega 46 42 2 rgb 0 230 255
+  draw_label bk_lbl_blocks 46 64 2 rgb 255 224 130
+  fill_rect 42 88 156 1 rgb 46 72 118
+  draw_label bk_lbl_score 46 104 2 rgb 148 184 228
+  draw_uint ulong get bk_st 7 46 128 2 rgb 255 255 255
+  draw_label bk_lbl_lines 46 176 2 rgb 148 184 228
+  draw_uint ulong get bk_st 8 46 200 2 rgb 34 229 138
+  draw_label bk_lbl_level 46 248 2 rgb 148 184 228
+  draw_uint ulong get bk_st 9 46 272 2 rgb 255 209 102
+  note right HUD panel (NEXT preview + 7-bag badge)
+  blend_rect 428 24 184 312 rgb 10 16 34 220
+  rect_outline 428 24 184 312 rgb 184 107 255
+  draw_label bk_lbl_next 452 42 2 rgb 0 230 255
+  fill_rect 448 70 144 96 rgb 6 10 22
+  rect_outline 448 70 144 96 rgb 58 88 140
+  np = get bk_st 6
+  nc = bk_piece_color add np 1
+  for c ulong 4
+    px = add 488 mul bk_shape_dx np 0 int c BK_CELL
+    py = add 94 mul bk_shape_dy np 0 int c BK_CELL
+    bk_draw_bevel px py nc
+  end
+  draw_label bk_lbl_bag 452 194 2 rgb 255 209 102
+  note render remaining pieces in current 7-bag as mini color pips
+  bp = get bk_st 1
+  for i ulong 7
+    bx = add 452 mul int i 20
+    col = rgb 28 38 62
+    if ge int i bp
+      col = bk_piece_color add int get bag i 1
+    end
+    fill_rect bx 222 14 14 col
+    rect_outline bx 222 14 14 rgb 180 210 255
+  end
+  draw_label bk_lbl_frame 452 264 2 rgb 148 184 228
+  draw_uint ulong get bk_st 14 452 288 2 rgb 220 238 255
+end
+
+fn bk_draw_one_pt px int py int c uint lf uint to void
+  rr = uclamp255 shr mul and shr c 16 255 lf 4
+  gg = uclamp255 shr mul and shr c 8 255 lf 4
+  bb = uclamp255 shr mul and c 255 lf 4
+  px_add px py rr gg bb
+  px_add add px 1 py rr gg bb
+  px_add px add py 1 rr gg bb
+  px_add add px 1 add py 1 rr gg bb
+  hr = shr rr 1
+  hg = shr gg 1
+  hb = shr bb 1
+  px_add sub px 1 py hr hg hb
+  px_add add px 2 py hr hg hb
+  px_add px sub py 1 hr hg hb
+  px_add px add py 2 hr hg hb
+end
+
+fn bk_draw_particles to void
+  for k ulong 96
+    lf = get pt_life k
+    if gt lf 0
+      bk_draw_one_pt shr get pt_x k 4 shr get pt_y k 4 get pt_col k uint lf
+    end
+  end
+end
+
+fn bk_draw_active to void
+  p = get bk_st 2
+  r = get bk_st 3
+  cx = get bk_st 4
+  cy = get bk_st 5
+  gy0 = bk_ghost_y p r cx cy
+  pc = bk_piece_color add p 1
+  for c ulong 4
+    dx = bk_shape_dx p r int c
+    dy = bk_shape_dy p r int c
+    gx = add BK_OX mul add cx dx BK_CELL
+    gy = add BK_OY mul add gy0 dy BK_CELL
+    bk_draw_ghost gx gy pc
+  end
+  for c ulong 4
+    dx = bk_shape_dx p r int c
+    dy = bk_shape_dy p r int c
+    gx = add BK_OX mul add cx dx BK_CELL
+    gy = add BK_OY mul add cy dy BK_CELL
+    bk_draw_bevel gx gy pc
+  end
+end
+
+fn bk_render to void
+  bk_draw_bg
+  note playfield frame
+  fill_rect sub BK_OX 4 sub BK_OY 4 168 328 rgb 6 10 20
+  rect_outline sub BK_OX 4 sub BK_OY 4 168 328 rgb 0 224 255
+  rect_outline sub BK_OX 2 sub BK_OY 2 164 324 rgb 38 62 104
+  note subtle playfield grid
+  for row ulong 20
+    for col ulong 10
+      gx = add BK_OX mul int col BK_CELL
+      gy = add BK_OY mul int row BK_CELL
+      rect_outline gx gy 15 15 rgb 16 24 44
+    end
+  end
+  note locked bevel blocks
+  for row ulong 20
+    for col ulong 10
+      cid = int get board add mul row 10 col
+      if ne cid 0
+        gx = add BK_OX mul int col BK_CELL
+        gy = add BK_OY mul int row BK_CELL
+        bk_draw_bevel gx gy bk_piece_color cid
+      end
+    end
+  end
+  bk_draw_active
+  note line-clear horizontal scanline flash
+  ft = get bk_st 12
+  if gt ft 0
+    fm = get bk_st 13
+    al = mul uint ft 22
+    for row ulong 20
+      if ne and shr fm int row 1 0
+        fy = add BK_OY mul int row BK_CELL
+        blend_rect BK_OX fy 160 BK_CELL rgb 230 252 255 al
+      end
+    end
+  end
+  bk_draw_particles
+  bk_draw_panels
+end
+
+fn main to int
+  gfx_init
+  if not parse_cli BK_HERO
+    z = write_all 2 err_badargs len err_badargs
+    ret 2
+  end
+  mode = get cli_cfg 0
+  param = get cli_cfg 1
+  bk_init
+  if eq mode 0
+    t0 = monons
+    dce = uint 0
+    for f ulong param bound 2000
+      bk_step f
+      bk_render
+      dce = xor dce sample_fb_u32 f
+    end
+    t1 = monons
+    sha_fb_ppm
+    emit_bench_line bk_gname param ulong sub t1 t0 dce
+    ret 0
+  end
+  if eq mode 1
+    hf = BK_HERO
+    if ge hf param
+      hf = sub param 1
+    end
+    for f ulong param bound 2000
+      bk_step f
+      bk_render
+      put frame_hashes f hash_fb_u32
+      if eq f hf
+        sha_fb_ppm
+        copy_dig_hero
+      end
+    end
+    sha_fb_ppm
+    copy_dig_fin
+    sha_stream_u32 param
+    emit_verify_line bk_gname param hf
+    ret 0
+  end
+  for f ulong add param 1 bound 2000
+    bk_step f
+    bk_render
+  end
+  ret write_ppm
+end

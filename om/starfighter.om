@@ -1,0 +1,629 @@
+note SPDX-License-Identifier: Apache-2.0
+note om/starfighter.om: Pure-Omega 4-Strand Vector Starfighter.
+note Fixed-pool parallax starfield, 3-class enemy formations, twin bolts +
+note 4-strand sweeping laser beams, RGB glow shockwave rings, and HUD.
+
+const SF_HERO ulong 195
+
+text sf_gname "GAME=starfighter"
+text sf_lbl_title "OMEGA STARFIGHTER"
+text sf_lbl_score "SCORE"
+text sf_lbl_wave "WAVE"
+text sf_lbl_shd "SHIELD"
+
+note sf_st: 0=rng, 1=px, 2=py, 3=score, 4=wave, 5=shield, 6=sweep_t, 7=frame
+global sf_st int 8
+global st_x int 64
+global st_y int 64
+global st_sp int 64
+global st_c uint 64
+global en_x int 24
+global en_y int 24
+global en_vx int 24
+global en_vy int 24
+global en_hp int 24
+global en_kind int 24
+global en_ph int 24
+global pb_x int 40
+global pb_y int 40
+global pb_vx int 40
+global pb_vy int 40
+global pb_c uint 40
+global pb_on int 40
+global eb_x int 32
+global eb_y int 32
+global eb_vx int 32
+global eb_vy int 32
+global eb_on int 32
+global rg_x int 12
+global rg_y int 12
+global rg_r int 12
+global rg_max int 12
+global rg_c uint 12
+global sp_x int 96
+global sp_y int 96
+global sp_vx int 96
+global sp_vy int 96
+global sp_life int 96
+global sp_c uint 96
+
+fn sf_rand to uint
+  s = uint get sf_st 0
+  s = add mul s uint 1664525 uint 1013904223
+  put sf_st 0 int and s 2147483647
+  ret s
+end
+
+fn sf_strand_col k ulong to uint
+  m = and k 3
+  if eq m 0
+    ret rgb 0 228 255
+  end
+  if eq m 1
+    ret rgb 255 209 102
+  end
+  if eq m 2
+    ret rgb 34 229 138
+  end
+  ret rgb 184 107 255
+end
+
+fn sf_spawn_ring x int y int rmax int c uint to void
+  for i ulong 12
+    if eq get rg_r i 0
+      put rg_x i x
+      put rg_y i y
+      put rg_r i 4
+      put rg_max i rmax
+      put rg_c i c
+      ret
+    end
+  end
+end
+
+fn sf_spawn_sparks x int y int c uint to void
+  n = int 0
+  for i ulong 96
+    if le get sp_life i 0
+      ang = mul n 85
+      spd = add 20 int and sf_rand 31
+      put sp_x i shl x 4
+      put sp_y i shl y 4
+      put sp_vx i shr mul icos1024 ang spd 12
+      put sp_vy i shr mul isin1024 ang spd 12
+      put sp_life i 18
+      put sp_c i c
+      n = add n 1
+      if ge n 12
+        ret
+      end
+    end
+  end
+end
+
+fn sf_spawn_wave wv int to void
+  put sf_st 4 wv
+  for i ulong 12
+    for s ulong 24
+      if le get en_hp s 0
+        col = int rem i 6
+        row = int div i 6
+        put en_x s add 110 mul col 84
+        put en_y s sub add 54 mul row 46 60
+        put en_vx s 1
+        put en_vy s 1
+        kind = int rem add i ulong wv 3
+        put en_kind s kind
+        hp = int 2
+        if eq kind 2
+          hp = 4
+        end
+        put en_hp s hp
+        put en_ph s mul int i 42
+        break
+      end
+    end
+  end
+end
+
+fn sf_init to void
+  put sf_st 0 987654321
+  put sf_st 1 320
+  put sf_st 2 294
+  put sf_st 3 0
+  put sf_st 4 1
+  put sf_st 5 100
+  put sf_st 6 0
+  put sf_st 7 0
+  for i ulong 64
+    put st_x i int rem sf_rand 640
+    put st_y i int rem sf_rand 360
+    layer = rem i 3
+    put st_sp i add 1 mul int layer 2
+    if eq layer 0
+      put st_c i rgb 58 76 122
+    else
+      if eq layer 1
+        put st_c i rgb 132 178 228
+      else
+        put st_c i rgb 215 244 255
+      end
+    end
+  end
+  for i ulong 24
+    put en_hp i 0
+  end
+  for i ulong 40
+    put pb_on i 0
+  end
+  for i ulong 32
+    put eb_on i 0
+  end
+  for i ulong 12
+    put rg_r i 0
+  end
+  for i ulong 96
+    put sp_life i 0
+  end
+  sf_spawn_wave 1
+end
+
+fn sf_fire_bolt x int y int vx int vy int c uint to void
+  for i ulong 40
+    if eq get pb_on i 0
+      put pb_x i x
+      put pb_y i y
+      put pb_vx i vx
+      put pb_vy i vy
+      put pb_c i c
+      put pb_on i 1
+      ret
+    end
+  end
+end
+
+fn sf_fire_ebolt x int y int vx int vy int to void
+  for i ulong 32
+    if eq get eb_on i 0
+      put eb_x i x
+      put eb_y i y
+      put eb_vx i vx
+      put eb_vy i vy
+      put eb_on i 1
+      ret
+    end
+  end
+end
+
+fn sf_kill_enemy idx ulong to void
+  ex = get en_x idx
+  ey = get en_y idx
+  kd = get en_kind idx
+  c = rgb 0 228 255
+  if eq kd 1
+    c = rgb 184 107 255
+  else
+    if eq kd 2
+      c = rgb 255 209 102
+    end
+  end
+  put en_hp idx 0
+  put sf_st 3 add get sf_st 3 mul add kd 1 150
+  sf_spawn_ring ex ey 46 c
+  sf_spawn_ring ex ey 28 rgb 255 245 210
+  sf_spawn_sparks ex ey c
+end
+
+fn sf_step fr ulong to void
+  put sf_st 7 int fr
+  note advance parallax stars
+  for i ulong 64
+    ny = add get st_y i get st_sp i
+    if ge ny 360
+      ny = sub ny 360
+      put st_x i int rem sf_rand 640
+    end
+    put st_y i ny
+  end
+  note smooth deterministic player weaving + targeting
+  ang = mul int fr 11
+  px = add 320 shr mul isin1024 ang 185 12
+  py = add 292 shr mul icos1024 mul int fr 7 18 12
+  put sf_st 1 px
+  put sf_st 2 py
+  note trigger 4-strand laser sweep periodically (active on hero frame 195!)
+  sw = get sf_st 6
+  if gt sw 0
+    put sf_st 6 sub sw 1
+  end
+  if eq rem fr 45 10
+    put sf_st 6 12
+  end
+  note fire quad/twin plasma bolts
+  if eq rem fr 5 0
+    c0 = sf_strand_col div fr 5
+    c1 = sf_strand_col add div fr 5 2
+    sf_fire_bolt sub px 14 sub py 10 0 -11 c0
+    sf_fire_bolt add px 14 sub py 10 0 -11 c1
+    if eq rem fr 15 0
+      sf_fire_bolt sub px 22 sub py 4 -3 -10 sf_strand_col 1
+      sf_fire_bolt add px 22 sub py 4 3 -10 sf_strand_col 3
+    end
+  end
+  note update player bolts and hit-test enemies
+  for b ulong 40
+    if ne get pb_on b 0
+      bx = add get pb_x b get pb_vx b
+      by = add get pb_y b get pb_vy b
+      put pb_x b bx
+      put pb_y b by
+      if or lt by 24 or lt bx 0 ge bx 640
+        put pb_on b 0
+      else
+        for e ulong 24
+          if gt get en_hp e 0
+            if lt iabs sub bx get en_x e 18
+              if lt iabs sub by get en_y e 14
+                put pb_on b 0
+                nhp = sub get en_hp e 1
+                if le nhp 0
+                  sf_kill_enemy e
+                else
+                  put en_hp e nhp
+                  sf_spawn_ring bx by 16 rgb 255 255 255
+                end
+                break
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+  note sweep beams damage enemies crossing beams
+  if gt get sf_st 6 0
+    for e ulong 24
+      if gt get en_hp e 0
+        ey = get en_y e
+        if and gt ey 36 lt ey py
+          ex = get en_x e
+          dx = iabs sub ex px
+          dy = sub py ey
+          if lt dx add 32 shr dy 1
+            if eq rem fr 3 0
+              nhp = sub get en_hp e 1
+              if le nhp 0
+                sf_kill_enemy e
+              else
+                put en_hp e nhp
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+  note update enemy formations
+  alive = int 0
+  for e ulong 24
+    if gt get en_hp e 0
+      alive = add alive 1
+      ph = add get en_ph e 12
+      put en_ph e ph
+      ex = add get en_x e shr mul isin1024 ph 3 12
+      ey = get en_y e
+      if lt ey 86
+        ey = add ey 2
+      else
+        ey = add ey shr mul icos1024 ph 2 12
+      end
+      ex = iclamp ex 44 596
+      ey = iclamp ey 38 220
+      put en_x e ex
+      put en_y e ey
+      if eq rem add fr mul e 7 37 0
+        sf_fire_ebolt ex add ey 12 shr mul isin1024 ph 3 12 4
+      end
+    end
+  end
+  if lt alive 4
+    sf_spawn_wave add get sf_st 4 1
+  end
+  note update enemy plasma orbs
+  for b ulong 32
+    if ne get eb_on b 0
+      bx = add get eb_x b get eb_vx b
+      by = add get eb_y b get eb_vy b
+      put eb_x b bx
+      put eb_y b by
+      if or ge by 356 or lt bx 0 ge bx 640
+        put eb_on b 0
+      else
+        if lt iabs sub bx px 14
+          if lt iabs sub by py 12
+            put eb_on b 0
+            sh = get sf_st 5
+            if gt sh 20
+              put sf_st 5 sub sh 5
+            end
+            sf_spawn_ring px py 26 rgb 255 96 120
+          end
+        end
+      end
+    end
+  end
+  note update shockwave rings
+  for i ulong 12
+    r = get rg_r i
+    if gt r 0
+      nr = add r 3
+      if ge nr get rg_max i
+        put rg_r i 0
+      else
+        put rg_r i nr
+      end
+    end
+  end
+  note update explosion sparks
+  for i ulong 96
+    lf = get sp_life i
+    if gt lf 0
+      put sp_x i add get sp_x i get sp_vx i
+      put sp_y i add get sp_y i get sp_vy i
+      put sp_life i sub lf 1
+    end
+  end
+end
+
+fn sf_draw_enemy x int y int kd int to void
+  if eq kd 0
+    note crimson/amber chevron interceptor
+    draw_glow_line x add y 12 sub x 15 sub y 8 rgb 255 76 92
+    draw_glow_line x add y 12 add x 15 sub y 8 rgb 255 76 92
+    draw_line sub x 15 sub y 8 x sub y 12 rgb 255 170 80
+    draw_line add x 15 sub y 8 x sub y 12 rgb 255 170 80
+    fill_rect sub x 4 sub y 4 8 8 rgb 255 190 92
+    fill_rect sub x 2 sub y 2 4 4 rgb 255 255 225
+  else
+    if eq kd 1
+      note violet/magenta twin-wing striker
+      draw_glow_line sub x 18 sub y 4 sub x 6 add y 10 rgb 190 92 255
+      draw_glow_line add x 18 sub y 4 add x 6 add y 10 rgb 190 92 255
+      draw_glow_line sub x 18 sub y 4 add x 18 sub y 4 rgb 255 96 220
+      fill_rect sub x 5 sub y 6 10 10 rgb 128 52 216
+      fill_rect sub x 2 sub y 3 4 4 rgb 0 238 255
+    else
+      note emerald/gold dreadnought cruiser
+      draw_glow_line sub x 20 y x sub y 12 rgb 38 232 142
+      draw_glow_line add x 20 y x sub y 12 rgb 38 232 142
+      draw_glow_line sub x 20 y x add y 12 rgb 255 206 86
+      draw_glow_line add x 20 y x add y 12 rgb 255 206 86
+      fill_rect sub x 8 sub y 5 16 10 rgb 28 112 88
+      fill_rect sub x 4 sub y 2 8 4 rgb 255 228 110
+    end
+  end
+end
+
+fn sf_trail_dot sx int sy int c uint sc uint to void
+  rr = uclamp255 shr mul and shr c 16 255 sc 3
+  gg = uclamp255 shr mul and shr c 8 255 sc 3
+  bb = uclamp255 shr mul and c 255 sc 3
+  px_add sx sy rr gg bb
+  px_add add sx 1 sy rr gg bb
+end
+
+fn sf_draw_one_trail px int py int fr int s ulong to void
+  c = sf_strand_col s
+  ox = sub mul int s 6 9
+  base_ph = add mul fr 28 mul int s 128
+  for k ulong 14
+    wave = shr mul isin1024 add base_ph mul int k 52 5 12
+    sx = add add px ox wave
+    sy = add add py 14 mul int k 3
+    sf_trail_dot sx sy c uint sub 14 int k
+  end
+end
+
+fn sf_draw_trails px int py int fr int to void
+  for s ulong 4
+    sf_draw_one_trail px py fr s
+  end
+end
+
+fn sf_draw_player to void
+  px = get sf_st 1
+  py = get sf_st 2
+  sf_draw_trails px py get sf_st 7
+  note 4-strand sweeping laser fan when active
+  sw = get sf_st 6
+  if gt sw 0
+    for s ulong 4
+      c = sf_strand_col s
+      off = sub mul int s 2 3
+      tx = add px mul off add 58 mul sw 6
+      draw_glow_line add px mul off 6 sub py 10 tx 28 c
+      draw_line add px mul off 6 sub py 10 tx 28 rgb 240 255 255
+    end
+  end
+  note swept delta wings + titanium fuselage
+  draw_glow_line px sub py 18 sub px 26 add py 12 rgb 0 228 255
+  draw_glow_line px sub py 18 add px 26 add py 12 rgb 0 228 255
+  draw_line sub px 26 add py 12 sub px 8 add py 6 rgb 140 220 255
+  draw_line add px 26 add py 12 add px 8 add py 6 rgb 140 220 255
+  fill_rect sub px 5 sub py 12 10 22 rgb 190 218 245
+  fill_rect sub px 14 add py 2 28 6 rgb 64 114 176
+  note glowing cockpit canopy
+  fill_rect sub px 3 sub py 8 6 10 rgb 0 232 255
+  fill_rect sub px 1 sub py 6 2 5 rgb 255 255 255
+  note wingtip 4-strand emitters
+  fill_rect sub px 24 add py 7 4 5 rgb 255 209 102
+  fill_rect add px 21 add py 7 4 5 rgb 184 107 255
+end
+
+fn sf_draw_hud to void
+  blend_rect 0 0 640 26 rgb 6 10 24 220
+  fill_rect 0 26 160 2 rgb 0 228 255
+  fill_rect 160 26 160 2 rgb 255 209 102
+  fill_rect 320 26 160 2 rgb 34 229 138
+  fill_rect 480 26 160 2 rgb 184 107 255
+  draw_label sf_lbl_title 12 9 1 rgb 0 230 255
+  draw_label sf_lbl_score 168 9 1 rgb 164 194 234
+  draw_uint ulong get sf_st 3 210 9 1 rgb 255 255 255
+  draw_label sf_lbl_wave 300 9 1 rgb 255 209 102
+  draw_uint ulong get sf_st 4 334 9 1 rgb 255 244 200
+  draw_label sf_lbl_shd 424 9 1 rgb 34 229 138
+  fill_rect 472 8 110 10 rgb 18 28 48
+  shw = iclamp mul get sf_st 5 1 0 106
+  fill_rect 474 10 shw 6 rgb 34 229 138
+  rect_outline 472 8 110 10 rgb 100 220 180
+end
+
+fn sf_fade_col c uint fade uint urm uint to uint
+  rr = uclamp255 div mul and shr c 16 255 fade urm
+  gg = uclamp255 div mul and shr c 8 255 fade urm
+  bb = uclamp255 div mul and c 255 fade urm
+  ret rgb rr gg bb
+end
+
+fn sf_draw_ring_one i ulong to void
+  r = get rg_r i
+  if le r 0
+    ret
+  end
+  rm = get rg_max i
+  fade = uint sub rm r
+  urm = uint rm
+  c1 = sf_fade_col get rg_c i fade urm
+  c2 = sf_fade_col get rg_c i shr fade 1 urm
+  draw_ring get rg_x i get rg_y i r c1
+  draw_ring get rg_x i get rg_y i add r 1 c2
+end
+
+fn sf_draw_spark_one i ulong to void
+  lf = get sp_life i
+  if le lf 0
+    ret
+  end
+  sx = shr get sp_x i 4
+  sy = shr get sp_y i 4
+  c = get sp_c i
+  ulf = uint lf
+  rr = uclamp255 shr mul and shr c 16 255 ulf 4
+  gg = uclamp255 shr mul and shr c 8 255 ulf 4
+  bb = uclamp255 shr mul and c 255 ulf 4
+  px_add sx sy rr gg bb
+  px_add add sx 1 sy rr gg bb
+  px_add sx add sy 1 rr gg bb
+end
+
+fn sf_render to void
+  note deep cosmos backdrop gradient
+  for y ulong 360
+    r = add uint 3 shr mul uint y 8 8
+    g = add uint 6 shr mul uint y 12 8
+    b = add uint 16 shr mul uint y 26 8
+    col = rgb r g b
+    row = mul y 640
+    for x ulong 640
+      put fb add row x col
+    end
+  end
+  note parallax starfield with speed streaks
+  for i ulong 64
+    sx = get st_x i
+    sy = get st_y i
+    sp = get st_sp i
+    c = get st_c i
+    px_set sx sy c
+    if gt sp 2
+      px_set sx sub sy 1 c
+      px_set sx sub sy 2 rgb 80 140 200
+    end
+  end
+  for i ulong 12
+    sf_draw_ring_one i
+  end
+  note player bolts (white core + additive glow)
+  for b ulong 40
+    if ne get pb_on b 0
+      bx = get pb_x b
+      by = get pb_y b
+      c = get pb_c b
+      draw_glow_line bx by bx add by 10 c
+      draw_line bx by bx add by 8 rgb 255 255 255
+    end
+  end
+  note enemy plasma orbs
+  for b ulong 32
+    if ne get eb_on b 0
+      bx = get eb_x b
+      by = get eb_y b
+      px_add bx by 255 120 90
+      px_add sub bx 1 by 220 60 80
+      px_add add bx 1 by 220 60 80
+      px_add bx sub by 1 220 60 80
+      px_add bx add by 1 220 60 80
+      px_set bx by rgb 255 240 210
+    end
+  end
+  note enemy formations
+  for e ulong 24
+    if gt get en_hp e 0
+      sf_draw_enemy get en_x e get en_y e get en_kind e
+    end
+  end
+  for i ulong 96
+    sf_draw_spark_one i
+  end
+  sf_draw_player
+  sf_draw_hud
+end
+
+fn main to int
+  gfx_init
+  if not parse_cli SF_HERO
+    z = write_all 2 err_badargs len err_badargs
+    ret 2
+  end
+  mode = get cli_cfg 0
+  param = get cli_cfg 1
+  sf_init
+  if eq mode 0
+    t0 = monons
+    dce = uint 0
+    for f ulong param bound 2000
+      sf_step f
+      sf_render
+      dce = xor dce sample_fb_u32 f
+    end
+    t1 = monons
+    sha_fb_ppm
+    emit_bench_line sf_gname param ulong sub t1 t0 dce
+    ret 0
+  end
+  if eq mode 1
+    hf = SF_HERO
+    if ge hf param
+      hf = sub param 1
+    end
+    for f ulong param bound 2000
+      sf_step f
+      sf_render
+      put frame_hashes f hash_fb_u32
+      if eq f hf
+        sha_fb_ppm
+        copy_dig_hero
+      end
+    end
+    sha_fb_ppm
+    copy_dig_fin
+    sha_stream_u32 param
+    emit_verify_line sf_gname param hf
+    ret 0
+  end
+  for f ulong add param 1 bound 2000
+    sf_step f
+    sf_render
+  end
+  ret write_ppm
+end

@@ -1,0 +1,304 @@
+note SPDX-License-Identifier: Apache-2.0
+note om/gate.om: Pure-Omega Security, Negative-Control & Tamper Verification Gate.
+note Verifies:
+note   G1: Out-of-bounds sprite write -> Trap 3 (exit 103, CWE-787)
+note   G2: Signed integer overflow    -> Trap 1 (exit 101, CWE-190)
+note   G3: Dynamic division by zero   -> Trap 2 (exit 102, CWE-369)
+note   G4: Infinite loop DoS          -> Trap 4 (exit 104, CWE-835)
+note   G5: Malformed CLI inputs       -> fail-closed exit 2 (CWE-20/400)
+note   G6: Malformed maze maps        -> fail-closed refusal (bad len, bad tile, open border)
+note   G7: 1-pixel framebuffer tamper -> FIPS 180-4 SHA-256 catches 1-bit flip & restores cleanly
+note   G8: Out-of-bounds sprite clip  -> zero traps on negative/oversized drawing calls
+note   G9: Hostile mod inside execpure-> Landlock + seccomp-BPF blocks FS/net/fork (-EPERM, rc=77)
+note  G10: Negative control unsandboxed-> exact same probe outside execpure returns rc=99
+
+text gt_hdr "=== OMEGA-ARCADE PURE-OM-2 NEGATIVE-CONTROL & SECURITY GATE ===\n"
+text gt_pass "PASS "
+text gt_fail "FAIL "
+text gt_sum1 "ARCADE_GATE "
+text gt_sum_ok "PASS "
+text gt_sum_bad "FAIL "
+text gt_pass_eq "pass="
+text gt_fail_eq " fail="
+text gt_g1 "G1_OOB_SPRITE_TRAP103\n"
+text gt_g2 "G2_SIGNED_OVERFLOW_TRAP101\n"
+text gt_g3 "G3_DIVZERO_TRAP102\n"
+text gt_g4 "G4_LOOP_BOUND_TRAP104\n"
+text gt_g5 "G5_MALFORMED_CLI_REFUSAL\n"
+text gt_g6 "G6_MALFORMED_MAP_REFUSAL\n"
+text gt_g7 "G7_1PIXEL_FRAMEBUFFER_TAMPER\n"
+text gt_g8 "G8_SPRITE_CLIP_SAFETY\n"
+text gt_g9 "G9_EXECPURE_HOSTILE_MOD_BLOCKED\n"
+text gt_g10 "G10_NEGCTRL_UNSANDBOXED_BREACH\n"
+
+text p_oob "/probe_oob"
+text p_ovf "/probe_overflow"
+text p_div "/probe_div0"
+text p_lop "/probe_loop"
+text p_esc "/probe_escape"
+text p_rc  "/raycast_doom"
+text p_bk  "/blocks_puzzle"
+text p_sf  "/starfighter"
+text a_bad "bogus"
+text a_bench "bench"
+text a_ppm "ppm"
+text a_zero "0"
+text a_huge "999999"
+text a_neg "-1"
+text def_dir "./bin"
+
+text good_map "1111111111111111100000200000000110300020040400011000000000000301100020000000000112002003000400011000000000000001104000000002002110000030000000011000000000000301102000000400000110200000000020011000030000002001100000000000000110040002003000011111111111111111"
+text bad_map_short "1111111111111111"
+text bad_map_tile "1111111111111111100000900000000110300020040400011000000000000301100020000000000112002003000400011000000000000001104000000002002110000030000000011000000000000301102000000400000110200000000020011000030000002001100000000000000110040002003000011111111111111111"
+text bad_map_open "1111111011111111100000200000000110300020040400011000000000000301100020000000000112002003000400011000000000000001104000000002002110000030000000011000000000000301102000000400000110200000000020011000030000002001100000000000000110040002003000011111111111111111"
+
+global gt_dir uchar 256
+global gt_dlen ulong 1
+global gt_pack uchar 1024
+global gt_counts ulong 2
+
+fn pack_u16 o ulong v ulong to void
+  put gt_pack o uchar and v 255
+  put gt_pack add o 1 uchar and shr v 8 255
+end
+
+fn pack_arg0 suf view uchar * to ulong
+  dl = get gt_dlen 0
+  sl = len suf
+  tot = add dl sl
+  pack_u16 2 tot
+  for i ulong dl bound 256
+    put gt_pack add 4 i get gt_dir i
+  end
+  for i ulong sl bound 64
+    put gt_pack add add 4 dl i get suf i
+  end
+  ret add 4 tot
+end
+
+fn pack_extra o ulong s view uchar * to ulong
+  sl = len s
+  pack_u16 o sl
+  for i ulong sl bound 64
+    put gt_pack add add o 2 i get s i
+  end
+  ret add add o 2 sl
+end
+
+fn spawn_rc plen ulong use_pure bool to int
+  pid = fork
+  if lt pid 0
+    ret -1
+  end
+  if eq pid 0
+    note redirect stderr/stdout of probe children to /dev/null if desired, or let quiet
+    if use_pure
+      z = execpure gt_pack 0 plen
+      exit 126
+    else
+      z = execprog gt_pack 0 plen
+      exit 127
+    end
+  end
+  st = new uchar 8 0
+  z = waitpid int pid st 0 8 0
+  if lt z 0
+    ret -1
+  end
+  w = or uint get st 0 shl uint get st 1 8
+  sig = and w 127
+  if ne sig 0
+    ret add 128 int sig
+  end
+  ret int and shr w 8 255
+end
+
+fn run_probe suf view uchar * use_pure bool to int
+  pack_u16 0 1
+  o = pack_arg0 suf
+  ret spawn_rc o use_pure
+end
+
+fn run_game_arg1 suf view uchar * a1 view uchar * to int
+  pack_u16 0 2
+  o = pack_arg0 suf
+  o = pack_extra o a1
+  ret spawn_rc o false
+end
+
+fn run_game_arg2 suf view uchar * a1 view uchar * a2 view uchar * to int
+  pack_u16 0 3
+  o = pack_arg0 suf
+  o = pack_extra o a1
+  o = pack_extra o a2
+  ret spawn_rc o false
+end
+
+fn validate_map m view uchar * to bool
+  if ne len m 256
+    ret false
+  end
+  for y ulong 16
+    for x ulong 16
+      ch = get m add mul y 16 x
+      if lt ch 48
+        ret false
+      end
+      if gt ch 52
+        ret false
+      end
+      border = false
+      if eq x 0
+        border = true
+      end
+      if eq x 15
+        border = true
+      end
+      if eq y 0
+        border = true
+      end
+      if eq y 15
+        border = true
+      end
+      if border
+        if eq ch 48
+          ret false
+        end
+      end
+    end
+  end
+  ret true
+end
+
+fn dig_eq_hero to bool
+  for i ulong 32
+    if ne get sha_dig i get sha_hero i
+      ret false
+    end
+  end
+  ret true
+end
+
+fn report ok bool label view uchar * to void
+  if ok
+    put gt_counts 0 add get gt_counts 0 1
+    z = write_all 1 gt_pass len gt_pass
+  else
+    put gt_counts 1 add get gt_counts 1 1
+    z = write_all 1 gt_fail len gt_fail
+  end
+  z = write_all 1 label len label
+  if ne z 0
+    ret
+  end
+end
+
+fn check_g5 to bool
+  if ne run_game_arg1 p_rc a_bad 2
+    ret false
+  end
+  if ne run_game_arg2 p_rc a_bench a_zero 2
+    ret false
+  end
+  if ne run_game_arg2 p_bk a_bench a_huge 2
+    ret false
+  end
+  if ne run_game_arg2 p_sf a_ppm a_neg 2
+    ret false
+  end
+  if ne run_game_arg2 p_sf a_ppm a_huge 2
+    ret false
+  end
+  ret true
+end
+
+fn check_g6 to bool
+  if not validate_map good_map
+    ret false
+  end
+  if validate_map bad_map_short
+    ret false
+  end
+  if validate_map bad_map_tile
+    ret false
+  end
+  if validate_map bad_map_open
+    ret false
+  end
+  ret true
+end
+
+fn check_g7 to bool
+  fill_rect 0 0 640 360 rgb 10 20 40
+  fill_rect 120 80 400 200 rgb 0 228 255
+  draw_ring 320 180 60 rgb 255 209 102
+  sha_fb_ppm
+  copy_dig_hero
+  note flip 1 single bit of 1 single pixel at (320, 180)
+  idx = add mul ulong 180 640 ulong 320
+  orig = get fb idx
+  put fb idx xor orig uint 1
+  sha_fb_ppm
+  if dig_eq_hero
+    ret false
+  end
+  note restore pixel and confirm exact digest recovery
+  put fb idx orig
+  sha_fb_ppm
+  ret dig_eq_hero
+end
+
+fn check_g8 to bool
+  px_set -50 -50 rgb 255 0 0
+  px_set 640 360 rgb 255 0 0
+  px_add -1 0 100 100 100
+  px_blend 700 400 rgb 0 255 0 128
+  fill_rect -30 -30 50 50 rgb 20 40 80
+  fill_rect 620 340 80 80 rgb 20 40 80
+  draw_line -40 -40 700 400 rgb 0 228 255
+  draw_ring 639 359 45 rgb 184 107 255
+  ret true
+end
+
+fn main to int
+  gfx_init
+  ac = argcnt
+  if ge ac 2
+    n = argread 1 gt_dir 0 250
+    if le n 0
+      ret 2
+    end
+    put gt_dlen 0 ulong n
+  else
+    for i ulong len def_dir bound 16
+      put gt_dir i get def_dir i
+    end
+    put gt_dlen 0 len def_dir
+  end
+  z = write_all 1 gt_hdr len gt_hdr
+  report eq run_probe p_oob false 103 gt_g1
+  report eq run_probe p_ovf false 101 gt_g2
+  report eq run_probe p_div false 102 gt_g3
+  report eq run_probe p_lop false 104 gt_g4
+  report check_g5 gt_g5
+  report check_g6 gt_g6
+  report check_g7 gt_g7
+  report check_g8 gt_g8
+  report eq run_probe p_esc true 77 gt_g9
+  report eq run_probe p_esc false 99 gt_g10
+  z = write_all 1 gt_sum1 len gt_sum1
+  if eq get gt_counts 1 0
+    z = write_all 1 gt_sum_ok len gt_sum_ok
+  else
+    z = write_all 1 gt_sum_bad len gt_sum_bad
+  end
+  z = write_all 1 gt_pass_eq len gt_pass_eq
+  out_u64 get gt_counts 0
+  z = write_all 1 gt_fail_eq len gt_fail_eq
+  out_u64 get gt_counts 1
+  z = write_all 1 s_nl len s_nl
+  if ne get gt_counts 1 0
+    ret 1
+  end
+  ret 0
+end

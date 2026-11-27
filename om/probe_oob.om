@@ -1,0 +1,14 @@
+note SPDX-License-Identifier: Apache-2.0
+note om/probe_oob.om: Deliberate dynamic out-of-bounds sprite framebuffer write.
+note Must deterministically trigger Omega Trap 3 (BOUNDS -> exit 103, CWE-787).
+global sprite_fb uint 230400
+
+fn bad_idx n ulong to ulong
+  ret add n 230400
+end
+
+fn main to int
+  idx = bad_idx ulong 0
+  put sprite_fb idx uint 0x00ff00ff
+  ret 0
+end

@@ -1,0 +1,975 @@
+note SPDX-License-Identifier: Apache-2.0
+note om/gfx_common.om: Pure seeded OM-2 zero-alloc 640x360 framebuffer,
+note fixed-point Q12 trig, 5x7 pixel font, additive RGB glow, streaming
+note FIPS 180-4 SHA-256 over P6 PPM / 300-frame stream, and CLI helpers.
+
+const FB_W int 640
+const FB_H int 360
+const FB_N ulong 230400
+
+text gfx_sinq1 "0 101 201 301 401 501 601 700 799 897 995 1092 1189 1285 1380 1474 1567 1660 1751 1842 1931 2019 2106 2191 2276 2359 2440 2520 2598 2675 2751 2824 2896 2967 3035 3102 3166 3229 3290 3349 3406 3461 3513 3564 3612 3659 3703 3745 3784 3822 3857 3889 3920 3948 3973 3996 4017 4036 4052 4065 4076 4085 4091 4095 4096"
+text gfx_font5x7 ">ACEIA>4<4444>>A168@ON11>11N26:BO22O@N11A>68@NAA>O124888>AA>AA>>AA?12<>AAOAAANAANAAN>A@@@A>LBAAABLO@@N@@OO@@N@@@>A@GAA>AAAOAAA>44444>7222BB<ABDHDBA@@@@@@OAKEEAAAAIECAAA>AAAAA>NAAN@@@>AAAEB=NAANDBA?@@>11NO444444AAAAAA>AAAAA:4AAAEEKAAA:4:AAAA:4444O1248@O0440440000O0000000000"
+text sha_kiv "1116352408 1899447441 3049323471 3921009573 961987163 1508970993 2453635748 2870763221 3624381080 310598401 607225278 1426881987 1925078388 2162078206 2614888103 3248222580 3835390401 4022224774 264347078 604807628 770255983 1249150122 1555081692 1996064986 2554220882 2821834349 2952996808 3210313671 3336571891 3584528711 113926993 338241895 666307205 773529912 1294757372 1396182291 1695183700 1986661051 2177026350 2456956037 2730485921 2820302411 3259730800 3345764771 3516065817 3600352804 4094571909 275423344 430227734 506948616 659060556 883997877 958139571 1322822218 1537002063 1747873779 1955562222 2024104815 2227730452 2361852424 2428436474 2756734187 3204031479 3329325298 1779033703 3144134277 1013904242 2773480762 1359893119 2600822924 528734635 1541459225"
+text ppm_hdr "P6\n640 360\n255\n"
+text err_badargs "ERR bad args\n"
+text tok_bench "bench"
+text tok_verify "verify"
+text tok_ppm "ppm"
+text s_sp_frames " FRAMES="
+text s_sp_ns " NS="
+text s_sp_us " US_PER_FRAME="
+text s_sp_fps " FPS_X100="
+text s_sp_dce " ANTI_DCE="
+text s_sp_vm " VMHWM_KB="
+text s_sp_hf " HERO_FRAME="
+text s_sp_hsha " HERO_PPM_SHA256="
+text s_sp_fsha " FINAL_PPM_SHA256="
+text s_sp_ssha " STREAM_SHA256="
+text s_nl "\n"
+text p_proc_stat "/proc/self/status"
+text tok_vmhwm "VmHWM:"
+
+global fb uint 230400
+global rowbuf uchar 1920
+global sin_lut int 256
+global frame_hashes uint 2048
+global sha_k uint 72
+global sha_w uint 64
+global sha_v uint 8
+global sha_h uint 8
+global sha_blk uchar 64
+global sha_dig uchar 32
+global sha_hero uchar 32
+global sha_fin uchar 32
+global sha_st ulong 3
+global cli_cfg ulong 4
+global io_num uchar 64
+global br_c uint 4
+
+fn iabs x int to int
+  if lt x 0
+    ret neg x
+  end
+  ret x
+end
+
+fn imin a int b int to int
+  if lt a b
+    ret a
+  end
+  ret b
+end
+
+fn imax a int b int to int
+  if gt a b
+    ret a
+  end
+  ret b
+end
+
+fn iclamp v int lo int hi int to int
+  if lt v lo
+    ret lo
+  end
+  if gt v hi
+    ret hi
+  end
+  ret v
+end
+
+fn uclamp255 v uint to uint
+  if gt v 255
+    ret uint 255
+  end
+  ret v
+end
+
+fn rgb r uint g uint b uint to uint
+  rr = uclamp255 r
+  gg = uclamp255 g
+  bb = uclamp255 b
+  ret or or shl rr 16 shl gg 8 bb
+end
+
+fn gfx_init to void
+  if ne get sha_st 0 0
+    ret
+  end
+  put sha_st 0 1
+  note parse 65-entry Q12 first-quadrant sine table
+  q = new int 65 0
+  p = ulong 0
+  for i ulong 65
+    v = int 0
+    while and lt p len gfx_sinq1 lt get gfx_sinq1 p 48 bound 4
+      p = add p 1
+    end
+    done = false
+    while not done bound 8
+      if ge p len gfx_sinq1
+        done = true
+      else
+        ch = get gfx_sinq1 p
+        if lt ch 48
+          done = true
+        else
+          v = add mul v 10 int sub ch 48
+          p = add p 1
+        end
+      end
+    end
+    put q i v
+  end
+  for i ulong 64
+    put sin_lut i get q i
+    put sin_lut add i 64 get q sub 64 i
+    put sin_lut add i 128 neg get q i
+    put sin_lut add i 192 neg get q sub 64 i
+  end
+  note parse 72 SHA-256 K + IV constants
+  p = ulong 0
+  for i ulong 72
+    u = ulong 0
+    while and lt p len sha_kiv lt get sha_kiv p 48 bound 4
+      p = add p 1
+    end
+    done = false
+    while not done bound 12
+      if ge p len sha_kiv
+        done = true
+      else
+        ch = get sha_kiv p
+        if lt ch 48
+          done = true
+        else
+          u = add mul u 10 ulong sub ch 48
+          p = add p 1
+        end
+      end
+    end
+    put sha_k i uint u
+  end
+end
+
+note smooth Q12 sin over 0..1023 angle steps (linear interp on 256-entry LUT)
+fn isin1024 a int to int
+  m = and a 1023
+  idx = ulong shr m 2
+  idx2 = and add idx 1 255
+  frac = and m 3
+  v0 = get sin_lut idx
+  v1 = get sin_lut idx2
+  w0 = sub 4 frac
+  ret shr add mul v0 w0 mul v1 frac 2
+end
+
+fn icos1024 a int to int
+  ret isin1024 add a 256
+end
+
+fn px_set x int y int c uint to void
+  if lt x 0
+    ret
+  end
+  if ge x FB_W
+    ret
+  end
+  if lt y 0
+    ret
+  end
+  if ge y FB_H
+    ret
+  end
+  idx = add mul ulong y 640 ulong x
+  put fb idx c
+end
+
+fn px_add x int y int dr uint dg uint db uint to void
+  if lt x 0
+    ret
+  end
+  if ge x FB_W
+    ret
+  end
+  if lt y 0
+    ret
+  end
+  if ge y FB_H
+    ret
+  end
+  idx = add mul ulong y 640 ulong x
+  cur = get fb idx
+  r = uclamp255 add and shr cur 16 255 dr
+  g = uclamp255 add and shr cur 8 255 dg
+  b = uclamp255 add and cur 255 db
+  put fb idx or or shl r 16 shl g 8 b
+end
+
+fn blend_ch bg uint fg uint al uint to uint
+  t1 = mul bg sub 256 al
+  t2 = mul fg al
+  ret shr add t1 t2 8
+end
+
+fn px_blend x int y int c uint al uint to void
+  if lt x 0
+    ret
+  end
+  if ge x FB_W
+    ret
+  end
+  if lt y 0
+    ret
+  end
+  if ge y FB_H
+    ret
+  end
+  idx = add mul ulong y 640 ulong x
+  bg = get fb idx
+  r = blend_ch and shr bg 16 255 and shr c 16 255 al
+  g = blend_ch and shr bg 8 255 and shr c 8 255 al
+  b = blend_ch and bg 255 and c 255 al
+  put fb idx or or shl r 16 shl g 8 b
+end
+
+fn fill_rect x int y int w int h int c uint to void
+  w = imin add x w FB_W
+  h = imin add y h FB_H
+  x = imax x 0
+  y = imax y 0
+  if ge x w
+    ret
+  end
+  if ge y h
+    ret
+  end
+  while lt y h bound 360
+    row = mul ulong y 640
+    xx = x
+    while lt xx w bound 640
+      put fb add row ulong xx c
+      xx = add xx 1
+    end
+    y = add y 1
+  end
+end
+
+fn blend_row row ulong x int w int to void
+  ia = get br_c 0
+  while lt x w bound 640
+    idx = add row ulong x
+    bg = get fb idx
+    r = shr add mul and shr bg 16 255 ia get br_c 1 8
+    g = shr add mul and shr bg 8 255 ia get br_c 2 8
+    b = shr add mul and bg 255 ia get br_c 3 8
+    put fb idx or or shl r 16 shl g 8 b
+    x = add x 1
+  end
+end
+
+fn blend_rect x int y int w int h int c uint al uint to void
+  w = imin add x w FB_W
+  h = imin add y h FB_H
+  x = imax x 0
+  y = imax y 0
+  if ge x w
+    ret
+  end
+  if ge y h
+    ret
+  end
+  put br_c 0 sub 256 al
+  put br_c 1 mul and shr c 16 255 al
+  put br_c 2 mul and shr c 8 255 al
+  put br_c 3 mul and c 255 al
+  while lt y h bound 360
+    blend_row mul ulong y 640 x w
+    y = add y 1
+  end
+end
+
+fn rect_outline x int y int w int h int c uint to void
+  if le w 0
+    ret
+  end
+  if le h 0
+    ret
+  end
+  fill_rect x y w 1 c
+  fill_rect x sub add y h 1 w 1 c
+  fill_rect x y 1 h c
+  fill_rect sub add x w 1 y 1 h c
+end
+
+fn draw_line x0 int y0 int x1 int y1 int c uint to void
+  dx = iabs sub x1 x0
+  dy = neg iabs sub y1 y0
+  sx = int -1
+  if lt x0 x1
+    sx = 1
+  end
+  sy = int -1
+  if lt y0 y1
+    sy = 1
+  end
+  er = add dx dy
+  done = false
+  while not done bound 1200
+    px_set x0 y0 c
+    if eq x0 x1
+      if eq y0 y1
+        done = true
+      end
+    end
+    if not done
+      e2 = mul er 2
+      if ge e2 dy
+        er = add er dy
+        x0 = add x0 sx
+      end
+      if le e2 dx
+        er = add er dx
+        y0 = add y0 sy
+      end
+    end
+  end
+end
+
+fn px_glow_pt cx int cy int c uint to void
+  r = and shr c 16 255
+  g = and shr c 8 255
+  b = and c 255
+  hr = shr r 1
+  hg = shr g 1
+  hb = shr b 1
+  px_add cx cy r g b
+  px_add sub cx 1 cy hr hg hb
+  px_add add cx 1 cy hr hg hb
+  px_add cx sub cy 1 hr hg hb
+  px_add cx add cy 1 hr hg hb
+end
+
+fn draw_glow_line x0 int y0 int x1 int y1 int c uint to void
+  dx = iabs sub x1 x0
+  dy = neg iabs sub y1 y0
+  sx = int -1
+  if lt x0 x1
+    sx = 1
+  end
+  sy = int -1
+  if lt y0 y1
+    sy = 1
+  end
+  er = add dx dy
+  done = false
+  while not done bound 1200
+    px_glow_pt x0 y0 c
+    if eq x0 x1
+      if eq y0 y1
+        done = true
+      end
+    end
+    if not done
+      e2 = mul er 2
+      if ge e2 dy
+        er = add er dy
+        x0 = add x0 sx
+      end
+      if le e2 dx
+        er = add er dx
+        y0 = add y0 sy
+      end
+    end
+  end
+end
+
+fn ring_oct cx int cy int dx int dy int c uint to void
+  r = and shr c 16 255
+  g = and shr c 8 255
+  b = and c 255
+  px_add add cx dx add cy dy r g b
+  px_add sub cx dx add cy dy r g b
+  px_add add cx dx sub cy dy r g b
+  px_add sub cx dx sub cy dy r g b
+  px_add add cx dy add cy dx r g b
+  px_add sub cx dy add cy dx r g b
+  px_add add cx dy sub cy dx r g b
+  px_add sub cx dy sub cy dx r g b
+end
+
+fn draw_ring cx int cy int rad int c uint to void
+  if le rad 0
+    ret
+  end
+  x = rad
+  y = int 0
+  err = sub 1 rad
+  while ge x y bound 256
+    ring_oct cx cy x y c
+    y = add y 1
+    if lt err 0
+      err = add err add mul 2 y 1
+    else
+      x = sub x 1
+      err = add err add mul 2 sub y x 1
+    end
+  end
+end
+
+fn font_idx ch uchar to ulong
+  if ge ch 48
+    if le ch 57
+      ret ulong sub ch 48
+    end
+  end
+  if ge ch 65
+    if le ch 90
+      ret add ulong sub ch 65 10
+    end
+  end
+  if eq ch 58
+    ret ulong 36
+  end
+  if eq ch 45
+    ret ulong 37
+  end
+  ret ulong 38
+end
+
+fn draw_glyph ch uchar x int y int sc int c uint to void
+  gi = mul font_idx ch 7
+  for r ulong 7
+    bits = uint sub get gfx_font5x7 add gi r 48
+    for col ulong 5
+      sh = uint sub 4 col
+      if ne and shr bits sh 1 0
+        px = add x mul int col sc
+        py = add y mul int r sc
+        if eq sc 1
+          px_set px py c
+        else
+          fill_rect px py sc sc c
+        end
+      end
+    end
+  end
+end
+
+fn draw_label s view uchar * x int y int sc int c uint to void
+  n = len s
+  cx = x
+  step = mul 6 sc
+  for i ulong n bound 64
+    draw_glyph get s i cx y sc c
+    cx = add cx step
+  end
+end
+
+fn draw_uint val ulong x int y int sc int c uint to void
+  buf = new uchar 20 0
+  k = ulong 0
+  v = val
+  if eq v 0
+    put buf 0 uchar 48
+    k = 1
+  else
+    while gt v 0 bound 20
+      put buf k uchar add 48 rem v 10
+      v = div v 10
+      k = add k 1
+    end
+  end
+  cx = x
+  step = mul 6 sc
+  for i ulong k bound 20
+    idx = sub sub k 1 i
+    draw_glyph get buf idx cx y sc c
+    cx = add cx step
+  end
+end
+
+note ---- Streaming FIPS 180-4 SHA-256 ----
+fn sha_reset to void
+  gfx_init
+  for j ulong 8
+    put sha_h j get sha_k add j 64
+  end
+  put sha_st 1 0
+  put sha_st 2 0
+end
+
+fn sha_s0 a uint to uint
+  ret xor xor rotr a 2 rotr a 13 rotr a 22
+end
+
+fn sha_s1 e uint to uint
+  ret xor xor rotr e 6 rotr e 11 rotr e 25
+end
+
+fn sha_g0 x uint to uint
+  ret xor xor rotr x 7 rotr x 18 shr x 3
+end
+
+fn sha_g1 x uint to uint
+  ret xor xor rotr x 17 rotr x 19 shr x 10
+end
+
+fn sha_rnd i ulong to void
+  e = get sha_v 4
+  t1 = add get sha_v 7 sha_s1 e
+  ch = xor and e get sha_v 5 and not e get sha_v 6
+  t1 = add t1 ch
+  t1 = add t1 add get sha_k i get sha_w i
+  a = get sha_v 0
+  b = get sha_v 1
+  c = get sha_v 2
+  mj = xor xor and a b and a c and b c
+  t2 = add sha_s0 a mj
+  put sha_v 7 get sha_v 6
+  put sha_v 6 get sha_v 5
+  put sha_v 5 e
+  put sha_v 4 add get sha_v 3 t1
+  put sha_v 3 c
+  put sha_v 2 b
+  put sha_v 1 a
+  put sha_v 0 add t1 t2
+end
+
+fn sha_compress to void
+  for t ulong 16
+    o = mul t 4
+    w0 = shl uint get sha_blk o 24
+    w1 = shl uint get sha_blk add o 1 16
+    w2 = shl uint get sha_blk add o 2 8
+    w3 = uint get sha_blk add o 3
+    put sha_w t or or w0 w1 or w2 w3
+  end
+  for t ulong 48
+    u = add t 16
+    x = add sha_g1 get sha_w sub u 2 get sha_w sub u 7
+    put sha_w u add x add sha_g0 get sha_w sub u 15 get sha_w sub u 16
+  end
+  for j ulong 8
+    put sha_v j get sha_h j
+  end
+  for i ulong 64
+    sha_rnd i
+  end
+  for j ulong 8
+    put sha_h j add get sha_h j get sha_v j
+  end
+end
+
+fn sha_push b uchar to void
+  pos = get sha_st 1
+  put sha_blk pos b
+  pos = add pos 1
+  put sha_st 2 add get sha_st 2 1
+  if eq pos 64
+    sha_compress
+    pos = 0
+  end
+  put sha_st 1 pos
+end
+
+fn sha_finish to void
+  total = get sha_st 2
+  bits = mul total 8
+  sha_push uchar 128
+  pos = get sha_st 1
+  if gt pos 56
+    while lt pos 64 bound 64
+      put sha_blk pos uchar 0
+      pos = add pos 1
+    end
+    sha_compress
+    pos = 0
+  end
+  while lt pos 56 bound 64
+    put sha_blk pos uchar 0
+    pos = add pos 1
+  end
+  for j ulong 8
+    sh = mul sub 7 j 8
+    put sha_blk add 56 j uchar and shr bits sh 255
+  end
+  sha_compress
+  for j ulong 8
+    v = get sha_h j
+    for q ulong 4
+      s = uint mul sub 3 q 8
+      put sha_dig add mul j 4 q uchar and shr v s 255
+    end
+  end
+end
+
+fn sha_fb_ppm to void
+  sha_reset
+  for i ulong len ppm_hdr bound 32
+    sha_push get ppm_hdr i
+  end
+  for i ulong 230400
+    c = get fb i
+    sha_push uchar and shr c 16 255
+    sha_push uchar and shr c 8 255
+    sha_push uchar and c 255
+  end
+  sha_finish
+end
+
+fn sha_stream_u32 n ulong to void
+  sha_reset
+  for i ulong n bound 2048
+    v = get frame_hashes i
+    sha_push uchar and shr v 24 255
+    sha_push uchar and shr v 16 255
+    sha_push uchar and shr v 8 255
+    sha_push uchar and v 255
+  end
+  sha_finish
+end
+
+note full-frame 32-bit FNV-1a over all 230400 pixels
+fn hash_fb_u32 to uint
+  h = uint 2166136261
+  for i ulong 230400
+    h = mul xor h get fb i uint 16777619
+  end
+  ret h
+end
+
+note fast 1-pixel-per-scanline anti-DCE probe (360 pixels/frame)
+fn sample_fb_u32 fr ulong to uint
+  h = uint 2166136261
+  for y ulong 360
+    x = rem add mul y 73 mul fr 17 640
+    c = get fb add mul y 640 x
+    h = mul xor h c uint 16777619
+  end
+  ret h
+end
+
+note ---- I/O & PPM ----
+fn write_all fd int buf view uchar * n ulong to int
+  off = ulong 0
+  while lt off n bound 100000
+    k = write fd buf off sub n off
+    if le k 0
+      ret 1
+    end
+    off = add off ulong k
+  end
+  ret 0
+end
+
+fn write_rowbuf fd int n ulong to int
+  off = ulong 0
+  while lt off n bound 4096
+    k = write fd rowbuf off sub n off
+    if le k 0
+      ret 1
+    end
+    off = add off ulong k
+  end
+  ret 0
+end
+
+fn write_ppm to int
+  rc = write_all 1 ppm_hdr len ppm_hdr
+  if ne rc 0
+    ret 1
+  end
+  for y ulong 360
+    base = mul y 640
+    for x ulong 640
+      c = get fb add base x
+      o = mul x 3
+      put rowbuf o uchar and shr c 16 255
+      put rowbuf add o 1 uchar and shr c 8 255
+      put rowbuf add o 2 uchar and c 255
+    end
+    rc = write_rowbuf 1 1920
+    if ne rc 0
+      ret 1
+    end
+  end
+  ret 0
+end
+
+fn hexd v uint to uchar
+  if lt v 10
+    ret uchar add v 48
+  end
+  ret uchar add v 87
+end
+
+fn out_u64 v ulong to void
+  n = ulong 0
+  x = v
+  tmp = new uchar 24 0
+  if eq x 0
+    put tmp 0 uchar 48
+    n = 1
+  else
+    while gt x 0 bound 24
+      put tmp n uchar add 48 rem x 10
+      x = div x 10
+      n = add n 1
+    end
+  end
+  for i ulong n bound 24
+    put io_num i get tmp sub sub n 1 i
+  end
+  rc = write 1 io_num 0 n
+  if lt rc 0
+    ret
+  end
+end
+
+fn out_hex8 v uint to void
+  for i ulong 8
+    sh = uint mul sub 7 i 4
+    put io_num i hexd and shr v sh 15
+  end
+  rc = write 1 io_num 0 8
+  if lt rc 0
+    ret
+  end
+end
+
+fn out_dig src ulong to void
+  for i ulong 32
+    b = uchar 0
+    if eq src 0
+      b = get sha_dig i
+    else
+      if eq src 1
+        b = get sha_hero i
+      else
+        b = get sha_fin i
+      end
+    end
+    put io_num mul i 2 hexd and shr uint b 4 15
+    put io_num add mul i 2 1 hexd and uint b 15
+  end
+  rc = write 1 io_num 0 64
+  if lt rc 0
+    ret
+  end
+end
+
+fn eq_tok a view uchar * n ulong b view uchar * to bool
+  if ne n len b
+    ret false
+  end
+  for i ulong n bound 32
+    if ne get a i get b i
+      ret false
+    end
+  end
+  ret true
+end
+
+fn parse_u64 a view uchar * n ulong to long
+  if eq n 0
+    ret -1
+  end
+  if gt n 10
+    ret -1
+  end
+  v = ulong 0
+  for i ulong n bound 12
+    ch = get a i
+    if lt ch 48
+      ret -1
+    end
+    if gt ch 57
+      ret -1
+    end
+    v = add mul v 10 ulong sub ch 48
+  end
+  ret long v
+end
+
+note parses CLI: bench [1..2000] | verify [1..2000] | ppm [0..1999]
+fn parse_cli def_hero ulong to bool
+  put cli_cfg 0 0
+  put cli_cfg 1 300
+  put cli_cfg 2 1
+  ac = argcnt
+  if le ac 1
+    ret true
+  end
+  if gt ac 3
+    ret false
+  end
+  a1 = new uchar 32 0
+  n1 = argread 1 a1 0 32
+  if le n1 0
+    ret false
+  end
+  un1 = ulong n1
+  mode = ulong 99
+  if eq_tok a1 un1 tok_bench
+    mode = 0
+    put cli_cfg 1 300
+  else
+    if eq_tok a1 un1 tok_verify
+      mode = 1
+      put cli_cfg 1 300
+    else
+      if eq_tok a1 un1 tok_ppm
+        mode = 2
+        put cli_cfg 1 def_hero
+      else
+        ret false
+      end
+    end
+  end
+  put cli_cfg 0 mode
+  if eq ac 3
+    n2 = argread 2 a1 0 32
+    if le n2 0
+      ret false
+    end
+    val = parse_u64 a1 ulong n2
+    if lt val 0
+      ret false
+    end
+    if eq mode 2
+      if ge val 2000
+        ret false
+      end
+    else
+      if eq val 0
+        ret false
+      end
+      if gt val 2000
+        ret false
+      end
+    end
+    put cli_cfg 1 ulong val
+  end
+  ret true
+end
+
+fn copy_dig_hero to void
+  for i ulong 32
+    put sha_hero i get sha_dig i
+  end
+end
+
+fn copy_dig_fin to void
+  for i ulong 32
+    put sha_fin i get sha_dig i
+  end
+end
+
+fn parse_vm_at buf view uchar * p ulong un ulong to ulong
+  skip = true
+  while skip bound 32
+    if ge p un
+      skip = false
+    else
+      if ge get buf p 48
+        skip = false
+      else
+        p = add p 1
+      end
+    end
+  end
+  val = ulong 0
+  rd = true
+  while rd bound 16
+    if ge p un
+      rd = false
+    else
+      ch = get buf p
+      if lt ch 48
+        rd = false
+      else
+        if gt ch 57
+          rd = false
+        else
+          val = add mul val 10 ulong sub ch 48
+          p = add p 1
+        end
+      end
+    end
+  end
+  ret val
+end
+
+fn read_vmhwm_kb to ulong
+  buf = new uchar 2048 0
+  fd = fopen p_proc_stat 0 len p_proc_stat 0 0
+  if lt fd 0
+    ret ulong 0
+  end
+  n = read int fd buf 0 2048
+  z = fclose int fd
+  if le n 0
+    ret ulong 0
+  end
+  un = ulong n
+  i = ulong 0
+  while lt add i 6 un bound 2048
+    ok = true
+    for j ulong 6
+      if ne get buf add i j get tok_vmhwm j
+        ok = false
+      end
+    end
+    if ok
+      ret parse_vm_at buf add i 6 un
+    end
+    i = add i 1
+  end
+  ret ulong 0
+end
+
+fn emit_bench_line gname view uchar * frames ulong ns ulong dce uint to void
+  z = write_all 1 gname len gname
+  z = write_all 1 s_sp_frames len s_sp_frames
+  out_u64 frames
+  z = write_all 1 s_sp_ns len s_sp_ns
+  out_u64 ns
+  us_f = ulong 0
+  fps100 = ulong 0
+  if gt ns 0
+    us_f = div ns mul frames 1000
+    fps100 = div mul frames 100000000000 ns
+  end
+  z = write_all 1 s_sp_us len s_sp_us
+  out_u64 us_f
+  z = write_all 1 s_sp_fps len s_sp_fps
+  out_u64 fps100
+  z = write_all 1 s_sp_dce len s_sp_dce
+  out_hex8 dce
+  z = write_all 1 s_sp_vm len s_sp_vm
+  out_u64 read_vmhwm_kb
+  z = write_all 1 s_sp_fsha len s_sp_fsha
+  out_dig 0
+  z = write_all 1 s_nl len s_nl
+  if ne z 0
+    ret
+  end
+end
+
+fn emit_verify_line gname view uchar * frames ulong hf ulong to void
+  z = write_all 1 gname len gname
+  z = write_all 1 s_sp_frames len s_sp_frames
+  out_u64 frames
+  z = write_all 1 s_sp_hf len s_sp_hf
+  out_u64 hf
+  z = write_all 1 s_sp_hsha len s_sp_hsha
+  out_dig 1
+  z = write_all 1 s_sp_fsha len s_sp_fsha
+  out_dig 2
+  z = write_all 1 s_sp_ssha len s_sp_ssha
+  out_dig 0
+  z = write_all 1 s_nl len s_nl
+  if ne z 0
+    ret
+  end
+end

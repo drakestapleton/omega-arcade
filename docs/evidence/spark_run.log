@@ -1,0 +1,103 @@
+=== [1/5] Environment & Compiler Pin ===
+Linux spark-b87b 7.0.0-1019-nvidia #19~24.04.2-Ubuntu SMP PREEMPT_DYNAMIC Sun Sep  6 18:35:11 UTC 2 aarch64 aarch64 aarch64 GNU/Linux
+CPU_PIN=taskset -c 15
+OMC_SHA256=28fca13d44054e26f78c33d1753fd5c005d08e9144d95985c90bd75b60885072
+gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+v24.21.0
+Python 3.12.3
+=== [2/5] Build Pure-Omega Static ELFs (< 50 KiB) & C11 (-O3 -mcpu=native) ===
+BUILT [a64linux] /home/drakestapleton/arcade-work/bin/raycast_doom (41752 bytes)
+BUILT [a64linux] /home/drakestapleton/arcade-work/bin/blocks_puzzle (43832 bytes)
+BUILT [a64linux] /home/drakestapleton/arcade-work/bin/starfighter (48184 bytes)
+BUILT [a64linux] /home/drakestapleton/arcade-work/bin/probe_oob (324 bytes)
+BUILT [a64linux] /home/drakestapleton/arcade-work/bin/probe_overflow (304 bytes)
+BUILT [a64linux] /home/drakestapleton/arcade-work/bin/probe_loop (296 bytes)
+BUILT [a64linux] /home/drakestapleton/arcade-work/bin/probe_div0 (312 bytes)
+BUILT [a64linux] /home/drakestapleton/arcade-work/bin/probe_escape (1364 bytes)
+BUILT [a64linux] /home/drakestapleton/arcade-work/bin/gate (33448 bytes)
+SIZE raycast_doom: om=41752B c=71648B
+SIZE blocks_puzzle: om=43832B c=72040B
+SIZE starfighter: om=48184B c=72648B
+--- Linkage Audit ---
+bin/raycast_doom: ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked, no section header
+	not a dynamic executable
+bin/blocks_puzzle: ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked, no section header
+	not a dynamic executable
+bin/starfighter: ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked, no section header
+	not a dynamic executable
+bin/gate: ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked, no section header
+	not a dynamic executable
+bin/c/raycast_doom: ELF 64-bit LSB pie executable, ARM aarch64, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux-aarch64.so.1, BuildID[sha1]=1bf67520bd99297dbdb1554cc1509c74672da6e7, for GNU/Linux 3.7.0, not stripped
+	linux-vdso.so.1 (0x0000e522b283c000)
+	libc.so.6 => /lib/aarch64-linux-gnu/libc.so.6 (0x0000e522b2510000)
+	/lib/ld-linux-aarch64.so.1 (0x0000e522b2800000)
+=== [3/5] Pure-Omega Negative-Control & Security Gate (CPU 15) ===
+=== OMEGA-ARCADE PURE-OM-2 NEGATIVE-CONTROL & SECURITY GATE ===
+PASS G1_OOB_SPRITE_TRAP103
+PASS G2_SIGNED_OVERFLOW_TRAP101
+PASS G3_DIVZERO_TRAP102
+PASS G4_LOOP_BOUND_TRAP104
+PASS G5_MALFORMED_CLI_REFUSAL
+PASS G6_MALFORMED_MAP_REFUSAL
+PASS G7_1PIXEL_FRAMEBUFFER_TAMPER
+PASS G8_SPRITE_CLIP_SAFETY
+PASS G9_EXECPURE_HOSTILE_MOD_BLOCKED
+PASS G10_NEGCTRL_UNSANDBOXED_BREACH
+ARCADE_GATE PASS pass=10 fail=0
+--- Compile-Time Static OOB Refusal Control (omc error 21) ---
+STATIC_OOB_COMPILE_RC=21 BIN_BYTES=0 ERR=omc: line 4: error 21
+PASS G11_COMPILE_TIME_STATIC_OOB_ERR21
+=== [4/5] 4-Way Spark Bit-Exact 300-Frame Parity (OM-2 vs C vs Node vs Python 3) ===
+VERIFY raycast_doom   om_a64linux : GAME=raycast_doom FRAMES=300 HERO_FRAME=185 HERO_PPM_SHA256=6bac57339b917c42d89f9ed8481ae08f7b422d0c9f26fe3f48b97351ea736a52 FINAL_PPM_SHA256=daff8fe7b40653109eb56986364488b20160f7eb6083b8276d72921f935d3509 STREAM_SHA256=fcddd5379dba1f73958f9d32f70ae46146fc58050237890b5255404b87379923
+VERIFY raycast_doom   c_gcc_o3    : GAME=raycast_doom FRAMES=300 HERO_FRAME=185 HERO_PPM_SHA256=6bac57339b917c42d89f9ed8481ae08f7b422d0c9f26fe3f48b97351ea736a52 FINAL_PPM_SHA256=daff8fe7b40653109eb56986364488b20160f7eb6083b8276d72921f935d3509 STREAM_SHA256=fcddd5379dba1f73958f9d32f70ae46146fc58050237890b5255404b87379923
+VERIFY raycast_doom   node_v24    : GAME=raycast_doom FRAMES=300 HERO_FRAME=185 HERO_PPM_SHA256=6bac57339b917c42d89f9ed8481ae08f7b422d0c9f26fe3f48b97351ea736a52 FINAL_PPM_SHA256=daff8fe7b40653109eb56986364488b20160f7eb6083b8276d72921f935d3509 STREAM_SHA256=fcddd5379dba1f73958f9d32f70ae46146fc58050237890b5255404b87379923
+VERIFY raycast_doom   python3     : GAME=raycast_doom FRAMES=300 HERO_FRAME=185 HERO_PPM_SHA256=6bac57339b917c42d89f9ed8481ae08f7b422d0c9f26fe3f48b97351ea736a52 FINAL_PPM_SHA256=daff8fe7b40653109eb56986364488b20160f7eb6083b8276d72921f935d3509 STREAM_SHA256=fcddd5379dba1f73958f9d32f70ae46146fc58050237890b5255404b87379923
+PASS PARITY raycast_doom: 4-way bit-exact across 300 frames (69,120,000 px) + raw PPM (691215 B) verified
+VERIFY blocks_puzzle  om_a64linux : GAME=blocks_puzzle FRAMES=300 HERO_FRAME=248 HERO_PPM_SHA256=ddea108ea8b9649dcab8055006f5041a4003c4f567c304c3e77a015f2e8b7535 FINAL_PPM_SHA256=28256ac4e1ecced533f07df2a159b6c0862cac85713a32d8c960a1471d70ca4d STREAM_SHA256=95ea8731949096c035733e0288f306830551ada4e7cc26a20f1e449d2ef1185b
+VERIFY blocks_puzzle  c_gcc_o3    : GAME=blocks_puzzle FRAMES=300 HERO_FRAME=248 HERO_PPM_SHA256=ddea108ea8b9649dcab8055006f5041a4003c4f567c304c3e77a015f2e8b7535 FINAL_PPM_SHA256=28256ac4e1ecced533f07df2a159b6c0862cac85713a32d8c960a1471d70ca4d STREAM_SHA256=95ea8731949096c035733e0288f306830551ada4e7cc26a20f1e449d2ef1185b
+VERIFY blocks_puzzle  node_v24    : GAME=blocks_puzzle FRAMES=300 HERO_FRAME=248 HERO_PPM_SHA256=ddea108ea8b9649dcab8055006f5041a4003c4f567c304c3e77a015f2e8b7535 FINAL_PPM_SHA256=28256ac4e1ecced533f07df2a159b6c0862cac85713a32d8c960a1471d70ca4d STREAM_SHA256=95ea8731949096c035733e0288f306830551ada4e7cc26a20f1e449d2ef1185b
+VERIFY blocks_puzzle  python3     : GAME=blocks_puzzle FRAMES=300 HERO_FRAME=248 HERO_PPM_SHA256=ddea108ea8b9649dcab8055006f5041a4003c4f567c304c3e77a015f2e8b7535 FINAL_PPM_SHA256=28256ac4e1ecced533f07df2a159b6c0862cac85713a32d8c960a1471d70ca4d STREAM_SHA256=95ea8731949096c035733e0288f306830551ada4e7cc26a20f1e449d2ef1185b
+PASS PARITY blocks_puzzle: 4-way bit-exact across 300 frames (69,120,000 px) + raw PPM (691215 B) verified
+VERIFY starfighter    om_a64linux : GAME=starfighter FRAMES=300 HERO_FRAME=195 HERO_PPM_SHA256=cf1ca2191b3c3f31249f8dd6a4d51e5d1ec9180c15dfeb9a5bf3125e6eb72edf FINAL_PPM_SHA256=77dc9aa56eaf726c5509c4d19be784204e518b53368c61818fed1396462af8d2 STREAM_SHA256=f7ee03c4093b61cb32ac513aa27b16666bd1f04fa368b66107bf2291a9aac82b
+VERIFY starfighter    c_gcc_o3    : GAME=starfighter FRAMES=300 HERO_FRAME=195 HERO_PPM_SHA256=cf1ca2191b3c3f31249f8dd6a4d51e5d1ec9180c15dfeb9a5bf3125e6eb72edf FINAL_PPM_SHA256=77dc9aa56eaf726c5509c4d19be784204e518b53368c61818fed1396462af8d2 STREAM_SHA256=f7ee03c4093b61cb32ac513aa27b16666bd1f04fa368b66107bf2291a9aac82b
+VERIFY starfighter    node_v24    : GAME=starfighter FRAMES=300 HERO_FRAME=195 HERO_PPM_SHA256=cf1ca2191b3c3f31249f8dd6a4d51e5d1ec9180c15dfeb9a5bf3125e6eb72edf FINAL_PPM_SHA256=77dc9aa56eaf726c5509c4d19be784204e518b53368c61818fed1396462af8d2 STREAM_SHA256=f7ee03c4093b61cb32ac513aa27b16666bd1f04fa368b66107bf2291a9aac82b
+VERIFY starfighter    python3     : GAME=starfighter FRAMES=300 HERO_FRAME=195 HERO_PPM_SHA256=cf1ca2191b3c3f31249f8dd6a4d51e5d1ec9180c15dfeb9a5bf3125e6eb72edf FINAL_PPM_SHA256=77dc9aa56eaf726c5509c4d19be784204e518b53368c61818fed1396462af8d2 STREAM_SHA256=f7ee03c4093b61cb32ac513aa27b16666bd1f04fa368b66107bf2291a9aac82b
+PASS PARITY starfighter: 4-way bit-exact across 300 frames (69,120,000 px) + raw PPM (691215 B) verified
+=== [5/5] Paired Interleaved H2H FPS, Latency & Peak RAM (VmHWM) Benchmark (3 Trials, CPU 15) ===
+TRIAL 1/3 raycast_doom   om_a64linux :  1607.11 FPS |   622.24 us/f |   186.67 ms | VmHWM=   972 KB | DCE=3b8c2c63
+TRIAL 1/3 raycast_doom   c_gcc_o3    :  6151.83 FPS |   162.55 us/f |    48.77 ms | VmHWM=  2140 KB | DCE=3b8c2c63
+TRIAL 1/3 raycast_doom   node_v24    :  1867.44 FPS |   535.49 us/f |   160.65 ms | VmHWM= 59708 KB | DCE=3b8c2c63
+TRIAL 1/3 raycast_doom   python3     :    34.65 FPS | 28858.83 us/f |  8657.65 ms | VmHWM= 22384 KB | DCE=3b8c2c63
+TRIAL 2/3 raycast_doom   om_a64linux :  1610.12 FPS |   621.07 us/f |   186.32 ms | VmHWM=   968 KB | DCE=3b8c2c63
+TRIAL 2/3 raycast_doom   c_gcc_o3    :  6154.10 FPS |   162.49 us/f |    48.75 ms | VmHWM=  2136 KB | DCE=3b8c2c63
+TRIAL 2/3 raycast_doom   node_v24    :  1984.82 FPS |   503.82 us/f |   151.15 ms | VmHWM= 59836 KB | DCE=3b8c2c63
+TRIAL 2/3 raycast_doom   python3     :    34.56 FPS | 28937.95 us/f |  8681.38 ms | VmHWM= 22456 KB | DCE=3b8c2c63
+TRIAL 3/3 raycast_doom   om_a64linux :  1609.95 FPS |   621.14 us/f |   186.34 ms | VmHWM=   972 KB | DCE=3b8c2c63
+TRIAL 3/3 raycast_doom   c_gcc_o3    :  6103.55 FPS |   163.84 us/f |    49.15 ms | VmHWM=  2140 KB | DCE=3b8c2c63
+TRIAL 3/3 raycast_doom   node_v24    :  1893.01 FPS |   528.26 us/f |   158.48 ms | VmHWM= 60036 KB | DCE=3b8c2c63
+TRIAL 3/3 raycast_doom   python3     :    34.41 FPS | 29061.97 us/f |  8718.59 ms | VmHWM= 22388 KB | DCE=3b8c2c63
+TRIAL 1/3 blocks_puzzle  om_a64linux :  2807.89 FPS |   356.14 us/f |   106.84 ms | VmHWM=   968 KB | DCE=e7cdc442
+TRIAL 1/3 blocks_puzzle  c_gcc_o3    : 15946.80 FPS |    62.71 us/f |    18.81 ms | VmHWM=  2208 KB | DCE=e7cdc442
+TRIAL 1/3 blocks_puzzle  node_v24    :  1626.36 FPS |   614.87 us/f |   184.46 ms | VmHWM= 57780 KB | DCE=e7cdc442
+TRIAL 1/3 blocks_puzzle  python3     :    38.76 FPS | 25800.14 us/f |  7740.04 ms | VmHWM= 22012 KB | DCE=e7cdc442
+TRIAL 2/3 blocks_puzzle  om_a64linux :  2808.09 FPS |   356.11 us/f |   106.83 ms | VmHWM=   972 KB | DCE=e7cdc442
+TRIAL 2/3 blocks_puzzle  c_gcc_o3    : 15938.86 FPS |    62.74 us/f |    18.82 ms | VmHWM=  2204 KB | DCE=e7cdc442
+TRIAL 2/3 blocks_puzzle  node_v24    :  1614.24 FPS |   619.49 us/f |   185.85 ms | VmHWM= 57844 KB | DCE=e7cdc442
+TRIAL 2/3 blocks_puzzle  python3     :    38.48 FPS | 25990.55 us/f |  7797.17 ms | VmHWM= 22012 KB | DCE=e7cdc442
+TRIAL 3/3 blocks_puzzle  om_a64linux :  2808.26 FPS |   356.09 us/f |   106.83 ms | VmHWM=   968 KB | DCE=e7cdc442
+TRIAL 3/3 blocks_puzzle  c_gcc_o3    : 16059.97 FPS |    62.27 us/f |    18.68 ms | VmHWM=  2204 KB | DCE=e7cdc442
+TRIAL 3/3 blocks_puzzle  node_v24    :  1609.26 FPS |   621.40 us/f |   186.42 ms | VmHWM= 57224 KB | DCE=e7cdc442
+TRIAL 3/3 blocks_puzzle  python3     :    37.79 FPS | 26459.23 us/f |  7937.77 ms | VmHWM= 22008 KB | DCE=e7cdc442
+TRIAL 1/3 starfighter    om_a64linux :  5650.01 FPS |   176.99 us/f |    53.10 ms | VmHWM=   976 KB | DCE=fc7806f4
+TRIAL 1/3 starfighter    c_gcc_o3    : 34682.63 FPS |    28.83 us/f |     8.65 ms | VmHWM=  2148 KB | DCE=fc7806f4
+TRIAL 1/3 starfighter    node_v24    :  5431.12 FPS |   184.12 us/f |    55.24 ms | VmHWM= 60776 KB | DCE=fc7806f4
+TRIAL 1/3 starfighter    python3     :   166.24 FPS |  6015.41 us/f |  1804.62 ms | VmHWM= 18884 KB | DCE=fc7806f4
+TRIAL 2/3 starfighter    om_a64linux :  5649.69 FPS |   177.00 us/f |    53.10 ms | VmHWM=   980 KB | DCE=fc7806f4
+TRIAL 2/3 starfighter    c_gcc_o3    : 34404.02 FPS |    29.07 us/f |     8.72 ms | VmHWM=  2144 KB | DCE=fc7806f4
+TRIAL 2/3 starfighter    node_v24    :  5317.00 FPS |   188.08 us/f |    56.42 ms | VmHWM= 60740 KB | DCE=fc7806f4
+TRIAL 2/3 starfighter    python3     :   166.14 FPS |  6018.98 us/f |  1805.69 ms | VmHWM= 18884 KB | DCE=fc7806f4
+TRIAL 3/3 starfighter    om_a64linux :  5634.88 FPS |   177.47 us/f |    53.24 ms | VmHWM=   976 KB | DCE=fc7806f4
+TRIAL 3/3 starfighter    c_gcc_o3    : 34320.01 FPS |    29.14 us/f |     8.74 ms | VmHWM=  2152 KB | DCE=fc7806f4
+TRIAL 3/3 starfighter    node_v24    :  5512.13 FPS |   181.42 us/f |    54.42 ms | VmHWM= 59812 KB | DCE=fc7806f4
+TRIAL 3/3 starfighter    python3     :   166.28 FPS |  6014.08 us/f |  1804.22 ms | VmHWM= 18884 KB | DCE=fc7806f4
+WROTE /home/drakestapleton/arcade-work/docs/evidence/results.json

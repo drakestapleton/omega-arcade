@@ -1,0 +1,32 @@
+note SPDX-License-Identifier: Apache-2.0
+note om/probe_escape.om: Hostile untrusted game-mod sandbox escape probe.
+note Attempts fopen("/etc/passwd"), socknew(AF_INET), and fork().
+note Inside execpure: all 3 MUST return -1 (-EPERM) -> exits 77.
+note Outside execpure (negative control): succeeds -> exits 99.
+text p_passwd "/etc/passwd"
+
+fn main to int
+  st = new uchar 8 0
+  fd = fopen p_passwd 0 len p_passwd 0 0
+  if ge fd 0
+    z = fclose int fd
+    ret 99
+  end
+  sk = socknew 2 1 0
+  if ge sk 0
+    z = fclose int sk
+    ret 99
+  end
+  fk = fork
+  if eq fk 0
+    exit 0
+  end
+  if gt fk 0
+    z = waitpid int fk st 0 8 0
+    ret 99
+  end
+  if and eq fd -1 and eq sk -1 eq fk -1
+    ret 77
+  end
+  ret 88
+end

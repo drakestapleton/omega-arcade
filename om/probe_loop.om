@@ -1,0 +1,10 @@
+note SPDX-License-Identifier: Apache-2.0
+note om/probe_loop.om: Deliberate infinite DDA/gameplay loop DoS probe.
+note Must deterministically trigger Omega Trap 4 (LOOP_BOUND -> exit 104, CWE-835).
+fn main to int
+  acc = ulong 0
+  while true bound 10000
+    acc = add acc 1
+  end
+  ret int and acc 255
+end
